@@ -8,9 +8,6 @@ A python script captures an image from the camera every few seconds. At the end 
 ### Scheduling the job
 Each time the script is run it creates or updates a scheduled job in the Pi's crontab so there's no need to do this manually. 
 
-### Uploads to S3
-The images and MP4 can also be uploaded to an AWS S3 bucket by specifying an upload bucket in the config file.Images are uploaded every 30 seconds.  
-
 ### Configuration File
 This holds the IP address, camera location and name, and the location of data and logs as well as the name of any S3 bucket if thats being used. You can also tweak the gain to set the camera to at night though the default should be good.  See the section on Installation for more information. 
 
@@ -22,6 +19,9 @@ Note 2024-10-08 i realised i am not setting some parameters correctly. Will upda
 ## Hardware
 The camera module I'm using is an IMX307 but an IMX291 should also work.   
 I'm running the software on an Intel ATOM Z8350 miniPC with 4GB memory running Armbian but it should work on pretty much any Linux hardware. 
+
+## webserver
+A webserver is set up during installation and can be used to view the latest data, historical images and logs. 
 
 ### Installation
 On the target computer, run the following  
@@ -39,23 +39,23 @@ bash ./install.sh
   * LAT, LON, ALT - your latitude & longitude in degrees (+ for East) and elevation above sealevel in metres. 
   * other values can be left at their defauults. 
   
-### uploading to AWS S3 or an FTP server
-  * S3UPLOADLOC - if you want to upload to AWS S3 storage, provide a bucket name eg *s3://mybucket*. 
-  * IDKEY - a CSV file containing the AWS key and secret.
- 
-### uploading to an FTP server
-  * FTPSERVER, FTPUSER, FTPKEY - the server, userid and ssh keyfile to use
-  * FTPUPLOADLOC - the folder on the server to upload to
-  
 Now run *startAuroraCam.sh* and it should complete the installation and start capturing data.
 
 After the first few images have been captured, press Ctrl-C to abort, then reboot the Pi. Log in again and wait one minute, then you should find that the software has automatically started up and is saving images.
 
-## webserver
-A webserver is set up during installation and can be used to view the latest data, historical images and logs. 
 
+## Advanced Configuration 
+### uploading to AWS S3 or an FTP server
+The images and MP4 can also be uploaded to an AWS S3 bucket or sFTP server by specifying details in the config file. Images are uploaded every 30 seconds.  
+
+  * S3UPLOADLOC - if you want to upload to AWS S3 storage, provide a bucket name eg *s3://mybucket*. 
+  * IDKEY - a CSV file containing the AWS key and secret.
+ 
+  * FTPSERVER, FTPUSER, FTPKEY - the server, userid and ssh keyfile to use
+  * FTPUPLOADLOC - the folder on the server to upload to
+  
 ## Data Archival
 The process generates a lot of data. Automatic housekeeping is performed and will compress, then delete
 older data. You can specify how many days to keep via the ini file.
 
-If you have access to an sftp server you can also configure the system to upload zip files of data for safe keeping. You will need to  update the ARCHIVE section of the config file with the server, user, user's ssh key location, and the target folder. 
+If you have access to an sftp server you can also configure the system to archive zip files of data for safe keeping. You will need to  update the ARCHIVE section of the config file with the server, user, user's ssh key location, and the target folder. 
