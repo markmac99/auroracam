@@ -13,7 +13,7 @@ cd ~/source/auroracam
 flist=(startAuroraCam.sh archiveData.sh auroraCam.py config.ini setExpo.py sendToYoutube.py makeImageIndex.py imgindex.html.template index.html redoTimelapse.py archAndFree.py mqtt.cfg requirements.txt) 
 for f in ${flist[@]} ; do
 [ -f ${f} ] && rm ${f}
-wget https://raw.githubusercontent.com/markmac99/pi-meteortools/master/auroracam/${f}  
+wget https://raw.githubusercontent.com/markmac99/master/auroracam/${f}  
 done 
 chmod +x *.sh
 pip install -r requirements.txt
