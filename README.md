@@ -1,6 +1,6 @@
 # A Simple Aurora Camera
 
-The scripts in this folder implement a very simple aurora camera using a barebones IP camera.  I installed it on a Raspberry Pi4 running Bookworm 64-bit, but any small computer would do as long as its running a variant of Linux and has Python 3.7 or later. 
+The scripts in this folder implement a very simple aurora camera using a barebones IP camera.  As well as the Atom mini-pc mentioned below I have installed it on a Raspberry Pi4 running Bookworm 64-bit, but any small computer would do as long as its running a variant of Linux and has Python 3.7 or later. 
 
 ## How it works
 A python script captures an image from the camera every few seconds. At the end of the night, the saved images are made into an MP4 and hhe host is rebooted to ensure a clean start for the next day. The software also captures during the day, creating a separate set of data and timelapse. 
@@ -16,6 +16,8 @@ This holds the IP address, camera location and name, and the location of data an
 
 ### Camera Configuration
 The camera is configured by the software (using the python-dvr library) and no manual tweaks should be needed. The exposure and gain are automatically changed at dawn and dusk. 
+
+Note 2024-10-08 i realised i am not setting some parameters correctly. Will update this shortly. 
 
 ## Hardware
 The camera module I'm using is an IMX307 but an IMX291 should also work.   
