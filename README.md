@@ -17,7 +17,7 @@ The camera is configured by the software (using the python-dvr library) and no m
 Note 2024-10-08 i realised i am not setting some parameters correctly. Will update this shortly. 
 
 ## Hardware
-The camera module I'm using is an IMX307 but an IMX291 should also work. I'm using 4mm F/0.95 lens.  Here's links to the ones i bought, but be warned that links at AliExpress expire and / or get changed so you may need to hunt around. [camera module | https://www.aliexpress.com/item/1005002676397053.html?spm=a2g0o.order_list.order_list_main.5.638a1802CB1j2M] and [lens|https://www.aliexpress.com/item/1005003145991079.html?spm=a2g0o.order_list.order_list_main.16.638a1802CB1j2M]. When ordering the camera module, specify No Lens and With 48V PoE cable. 
+The camera module I'm using is an IMX307 but an IMX291 should also work. I'm using 4mm F/0.95 lens.  Here's links to the ones i bought, but be warned that links at AliExpress expire and / or get changed so you may need to hunt around. [https://www.aliexpress.com/item/1005002676397053.html?spm=a2g0o.order_list.order_list_main.5.638a1802CB1j2M|Camera Module] and [https://www.aliexpress.com/item/1005003145991079.html?spm=a2g0o.order_list.order_list_main.16.638a1802CB1j2M|lens]. When ordering the camera module, specify No Lens and With 48V PoE cable. 
 
 I'm running the software on an Intel ATOM Z8350 miniPC with 4GB memory running Armbian but it should work on pretty much any Linux hardware.  I also have it running on a Raspberry Pi4b. 
 
