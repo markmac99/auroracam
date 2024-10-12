@@ -12,16 +12,16 @@ import configparser
 import boto3 
 import logging 
 import logging.handlers
-from setExpo import setCameraExposure
-from crontab import CronTab
 import paho.mqtt.client as mqtt
 import platform 
 import paramiko
 import tempfile
 from sendToYoutube import sendToYoutube
-from makeImageIndex import createLatestIndex
 from PIL import Image, ImageFont, ImageDraw 
 import ephem
+
+from makeImageIndex import createLatestIndex
+from setExpo import setCameraExposure
 
 
 pausetime = 2 # time to wait between capturing frames 
@@ -143,7 +143,7 @@ def getDeletableFiles(thiscfg, filestokeep=[]):
     allfiles = [x for x in allfiles if 'FILES' not in x]
     origallfiles = allfiles
     for d in range(0,daystokeep):
-        yest = (datetime.datetime.now() - datetime.timedelta(days=d)).strftime('%Y%m%d')
+        yest = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=d)).strftime('%Y%m%d')
         allfiles = [x for x in allfiles if yest not in x]
     for patt in filestokeep:
         toarch = [x for x in origallfiles if patt.strip() in x]
@@ -338,7 +338,7 @@ def getNextRiseSet(lati, longi, elev, fordate=None):
     sun = ephem.Sun()
     rise = obs.next_rising(sun).datetime()
     set = obs.next_setting(sun).datetime()
-    return rise, set
+    return rise.replace(tzinfo=datetime.timezone.utc), set.replace(tzinfo=datetime.timezone.utc)
 
 
 def on_connect(client, userdata, flags, rc):
@@ -468,7 +468,7 @@ def getStartEndTimes(currdt, thiscfg, origdusk=None):
         if (nextset - origdusk) < datetime.timedelta(seconds=10):
             nextset = origdusk
     log.info(f'night starts at {nextset} and ends at {nextrise}')
-    return nextset, nextrise, lastrise
+    return nextset.replace(tzinfo=datetime.timezone.utc), nextrise.replace(tzinfo=datetime.timezone.utc), lastrise.replace(tzinfo=datetime.timezone.utc)
 
 
 def adjustColour(fnam, red=1, green=1, blue=1, fnamnew=None):
@@ -577,7 +577,7 @@ def setupLogging(thiscfg, prefix='auroracam_'):
     logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
     os.makedirs(logdir, exist_ok=True)
 
-    logfilename = os.path.join(logdir, prefix + datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S.%f') + '.log')
+    logfilename = os.path.join(logdir, prefix + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S.%f') + '.log')
     handler = logging.handlers.TimedRotatingFileHandler(logfilename, when='D', interval=1) 
     handler.setLevel(logging.INFO)
     handler.setLevel(logging.DEBUG)
@@ -614,24 +614,6 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
     return 
 
 
-def addCrontabEntry(local_path):
-    cron = CronTab(user=True)
-    iter=cron.find_command('startAuroraCam.sh')
-    for i in iter:
-        if i.is_enabled():
-            cron.remove(i)
-    job = cron.new(f'sleep 60 && {local_path}/startAuroraCam.sh > /tmp/startup.log 2>&1')
-    job.every_reboot()
-    cron.write()
-    iter=cron.find_command('archiveData.sh')
-    for i in iter:
-        if i.is_enabled():
-            cron.remove(i)
-    job = cron.new(f'{local_path}/archiveData.sh > /dev/null 2>&1')
-    job.setall('0 12 * * *')
-    cron.write()
-
-
 if __name__ == '__main__':
     ipaddress = sys.argv[1]
     hostname = platform.uname().node
@@ -642,6 +624,10 @@ if __name__ == '__main__':
     thiscfg.read(os.path.join(local_path, 'config.ini'))
     setupLogging(thiscfg)
 
+    datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
+    os.makedirs(datadir, exist_ok=True)
+    norebootflag = os.path.join(datadir, '..', '.noreboot')
+    open(norebootflag, 'w')
     freeSpaceAndArchive(thiscfg)
     s3 = None
     bucket = None
@@ -675,18 +661,13 @@ if __name__ == '__main__':
     except Exception:
         log.info('not sending to youtube')
 
-    addCrontabEntry(local_path)
-
     nightgain = int(thiscfg['auroracam']['nightgain'])
     camid = thiscfg['auroracam']['camid']
-    datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
-    os.makedirs(datadir, exist_ok=True)
-    norebootflag = os.path.join(datadir, '..', '.noreboot')
     if os.path.isfile(norebootflag):
         os.remove(norebootflag)
     
     # get todays dusk and tomorrows dawn times
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     dusk, dawn, lastdawn = getStartEndTimes(now, thiscfg)
     daytimelapse = int(thiscfg['auroracam']['daytimelapse'])
     if now > dawn or now < dusk:
@@ -699,7 +680,7 @@ if __name__ == '__main__':
     log.info(f'now {now}, dusk {dusk}, dawn {dawn} last dawn {lastdawn}')
     uploadcounter = 0
     while True:
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         fnam = os.path.expanduser(os.path.join(datadir, '..', 'live.jpg'))
         thiscfg.read(os.path.join(local_path, 'config.ini'))
         grabImage(ipaddress, fnam, hostname, now, thiscfg)
@@ -780,4 +761,8 @@ if __name__ == '__main__':
         if testmode == 1:
             log.info(f'would have uploaded {fnam}')
         log.info(f'sleeping for {pausetime} seconds')
+        if os.path.isfile(os.path.expanduser('~/.stopac')):
+            os.remove(os.path.expanduser('~/.stopac'))
+            log.info('Shutting down at user request')
+            exit(0)
         time.sleep(pausetime)

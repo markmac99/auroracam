@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Auroracam as a service
+After=network.target
+
+[Service]
+ExecStart=%h/source/auroracam/startAuroraCam.sh
+ExecStop=/usr/bin/touch %h/.stopac
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
