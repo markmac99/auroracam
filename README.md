@@ -5,8 +5,12 @@ The scripts in this folder implement a very simple aurora camera using a barebon
 ## How it works
 A python script captures an image from the camera every few seconds. At the end of the night, the saved images are made into an MP4 and hhe host is rebooted to ensure a clean start for the next day. The software also captures during the day, creating a separate set of data and timelapse. 
 
-### Scheduling the job
-Each time the script is run it creates or updates a scheduled job in the Pi's crontab so there's no need to do this manually. 
+### Startup
+The software runs as a service and starts automatically. To stop or start it, type the following in a Terminal window:  
+``` bash
+systemctl --user stop auroracam
+systemctl --user start auroracam
+``` 
 
 ### Configuration File
 This holds the IP address, camera location and name, and the location of data and logs as well as the name of any S3 bucket if thats being used. You can also tweak the gain to set the camera to at night though the default should be good.  See the section on Installation for more information. 

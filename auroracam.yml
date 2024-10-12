@@ -29,6 +29,7 @@
     - {src: '{{srcdir}}/logToMQTT.sh', dest: '{{destdir}}/', mode: '754', backup: no }
     - {src: '{{srcdir}}/requirements.txt', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/mqtt.cfg', dest: '{{destdir}}/', mode: '644', backup: no }
+    - {src: '{{srcdir}}/auroracam.service', dest: '{{destdir}}/', mode: '644', backup: no }
   # auroracam settings
   - name: update camera ipaddress
     lineinfile: 

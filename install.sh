@@ -10,7 +10,7 @@ mkdir -p ~/data/{auroracam,logs}
 chmod 755 ~
 cd ~/source/auroracam
 [ -f config.ini ] && mv config.ini config.bkp
-flist=(startAuroraCam.sh archiveData.sh auroraCam.py config.ini setExpo.py sendToYoutube.py makeImageIndex.py imgindex.html.template index.html redoTimelapse.py archAndFree.py mqtt.cfg requirements.txt) 
+flist=(startAuroraCam.sh auroraCam.py config.ini setExpo.py sendToYoutube.py makeImageIndex.py imgindex.html.template index.html redoTimelapse.py mqtt.cfg requirements.txt auroracam.service) 
 for f in ${flist[@]} ; do
 [ -f ${f} ] && rm ${f}
 wget https://raw.githubusercontent.com/markmac99/master/auroracam/${f}  
@@ -25,4 +25,8 @@ sudo chmod 666 /etc/lighttpd/lighttpd.conf
 echo server.dir-listing = \"enable\" >> /etc/lighttpd/lighttpd.conf 
 sudo chmod 644 /etc/lighttpd/lighttpd.conf
 sudo systemctl restart lighttpd
+sudo cp auroracam.service /etc/systemd/user
+systemctl --user daemon-reload
+systemctl --user enable auroracam
+systemctl --user start auroracam
 fi 
