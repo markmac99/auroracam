@@ -23,9 +23,9 @@ Note 2024-10-08 i realised i am not setting some parameters correctly (such as d
 ## Hardware
 The camera module I'm using is an IMX307 but an IMX291 should also work. When ordering the camera module, specify No Lens and With 48V PoE cable.  I'm using the 4mm F/0.95 lens we use for meteor hunting.  Here's links to the ones i bought, but be warned that links at AliExpress expire and / or get changed so you may need to hunt around:  [Camera](https://www.aliexpress.com/item/1005002676397053.html?spm=a2g0o.order_list.order_list_main.5.638a1802CB1j2M) and [lens](https://www.aliexpress.com/item/1005003145991079.html?spm=a2g0o.order_list.order_list_main.16.638a1802CB1j2M). 
 
-You'll also need a waterproof housing. Suitable CCTV housings can be got from Aliexpress too eg [this one](https://www.aliexpress.com/item/32814880318.html?spm=a2g0o.order_list.order_list_main.11.638a1802CB1j2M).
+You'll also need a waterproof housing. Suitable CCTV housings can be got from Aliexpress too eg [this one](https://www.aliexpress.com/item/32355130687.html?spm=a2g0o.order_list.order_list_main.25.78581802njHV4Y). Make sure you choose the Plate and Bracket option.
 
-I'm running the software on an Intel ATOM Z8350 miniPC with 4GB memory running Armbian but it should work on pretty much any Linux hardware.  I also have it running on a Raspberry Pi4b. 
+I'm running the software on an Intel ATOM Z8350 miniPC with 4GB memory running Armbian but I also have it running on a Raspberry Pi4b. 
 
 ## webserver
 A webserver is set up during installation and can be used to view the latest data, historical images and logs.  The webserver can be accessed at http://yourpisname/ where `yourpisname` is the hostname of the raspberry Pi. To make it easier to find, i recommend you give it a unique name such as "auroracam". Note that the site is http not https. 
