@@ -12,6 +12,10 @@ import binascii
 import socket
 import pprint
 from time import sleep
+import logging 
+
+
+log = logging.getLogger("logger")
 
 
 def connectToCam(host_ip):
@@ -20,13 +24,13 @@ def connectToCam(host_ip):
     for i in range(0,5):
         try: 
             if cam.login():
-                print("Success! Connected to " + host_ip)
+                log.info("Success! Connected to " + host_ip)
                 break
         except:
-            print("Failure. Could not connect. retrying in 30 seconds")
+            log.warning("Failure. Could not connect. retrying in 30 seconds")
             time.sleep(30)
     if i == 4:
-        print('unable to connect to camera, aborting')
+        log.error(f'unable to connect to camera at {host_ip}, aborting')
         exit(1)
     return cam
 
@@ -53,11 +57,11 @@ def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp
             expo = 100
             minexp = '0x00009C40'
         maxexp = '0x00009C40'
-
     cam = connectToCam(host_ip)
+
     params = cam.get_info("Camera")
-    print(params['Param'])
-    print(params['Param'][0]['ElecLevel'])
+    log.info(params['Param'])
+    log.info(params['Param'][0]['ElecLevel'])
 
     cam.set_info("Camera.Param.[0]",{"ElecLevel":expo})
     cam.set_info("Camera.Param.[0]",{"DayNightColor":cmode})
@@ -65,7 +69,7 @@ def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp
     cam.set_info("Camera.Param.[0].ExposureParam",{"LeastTime":minexp})
     cam.set_info("Camera.Param.[0].ExposureParam",{"MostTime":maxexp})
     params = cam.get_info("Camera")
-    print(params['Param'][0]['ElecLevel'])
+    log.info(params['Param'][0]['ElecLevel'])
 
     # disable OSD
     info = cam.get_info("AVEnc.VideoWidget")

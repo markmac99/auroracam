@@ -1,9 +1,8 @@
-from auroraCam import makeTimelapse, getAWSKey, setupLogging
+from auroraCam import makeTimelapse, getAWSConn, setupLogging
 import platform
 import os
 import sys
 import configparser
-import boto3
 import logging
 
 log = logging.getLogger("logger")
@@ -27,12 +26,8 @@ setupLogging(thiscfg)
 if ulloc[:5] == 's3://':
     idserver = thiscfg['uploads']['idserver']
     sshkey = thiscfg['uploads']['idkey']
-    awskey, awssec = getAWSKey(idserver, hostname, hostname, sshkey)
-    if not awskey:
-        log.error('unable to find AWS key')
-        exit(1)
-    conn = boto3.Session(aws_access_key_id=awskey, aws_secret_access_key=awssec)
-    s3 = conn.resource('s3')
+    uid = platform.uname()[1]
+    s3 = getAWSConn(thiscfg, uid, uid)
     bucket = ulloc[5:]
 else:
     print('not uploading to AWS S3')
