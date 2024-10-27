@@ -3,8 +3,7 @@
   vars_files: 
     - /mnt/e/dev/apikeys/mqvariables.enc
   vars:
-    srcdir: /mnt/e/dev/meteorhunting/pi-meteortools/auroracam
-    shrdir: /mnt/e/dev/meteorhunting/pi-meteortools/pi
+    srcdir: /mnt/e/dev/meteorhunting/auroracam
     destdir: ~/source/auroracam
   tasks:
   - name: Ensures {{destdir}} exists
@@ -115,6 +114,13 @@
       path: '{{destdir}}/config.ini'
       regexp: 'ARCHKEY='
       line: 'ARCHKEY=~/.ssh/markskey.pem'
+  # html index
+  - name: update HTML index file
+    ansible.builtin.replace:
+      path: "{{destdir}}/index.html"
+      regexp: 'DATADIR'
+      replace: 'data'
+
   - name: make sure modules are downloaded
     shell: source ~/vAuroracam/bin/activate && pip install -r {{destdir}}/requirements.txt
     # also need sudo apt-get install python3-opencv ffmpeg

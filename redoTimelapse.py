@@ -17,15 +17,13 @@ if len(sys.argv) > 2:
 thiscfg = configparser.ConfigParser()
 local_path =os.path.dirname(os.path.abspath(__file__))
 thiscfg.read(os.path.join(local_path, 'config.ini'))
-ulloc = thiscfg['auroracam']['uploadloc']
+ulloc = thiscfg['uploads']['s3uploadloc']
 camid = thiscfg['auroracam']['camid']
 datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
 hostname = platform.uname().node
 
 setupLogging(thiscfg)
 if ulloc[:5] == 's3://':
-    idserver = thiscfg['uploads']['idserver']
-    sshkey = thiscfg['uploads']['idkey']
     uid = platform.uname()[1]
     s3 = getAWSConn(thiscfg, uid, uid)
     bucket = ulloc[5:]
