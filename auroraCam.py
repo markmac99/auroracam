@@ -11,6 +11,7 @@ import subprocess
 import configparser
 import boto3 
 import logging 
+import glob
 import logging.handlers
 import paho.mqtt.client as mqtt
 import platform 
@@ -617,7 +618,6 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
 if __name__ == '__main__':
     ipaddress = sys.argv[1]
     hostname = platform.uname().node
-    hostname = platform.uname().node
 
     thiscfg = configparser.ConfigParser()
     local_path =os.path.dirname(os.path.abspath(__file__))
@@ -695,7 +695,14 @@ if __name__ == '__main__':
         if dusk != lastdusk and isnight:
             # its dawn
             capdirname = os.path.join(datadir, lastdusk.strftime('%Y%m%d_%H%M%S'))
-            
+
+        # due to slight variations in the results from ephem, the time of dawn and dusk may drift by a second or two
+        # this caters for it be reusing any existing folder thats timestamped within 10s
+        capdirbase = os.path.split(capdirname)[1]
+        existingfolder = glob.glob(os.path.join('/home/mark/data/auroracam', capdirbase[:-2]+'*'))
+        if len(existingfolder) > 0:
+            capdirname = existingfolder
+
         if daytimelapse or isnight: 
             os.makedirs(capdirname, exist_ok=True)
             fnam2 = os.path.join(capdirname, now.strftime('%Y%m%d_%H%M%S') + '.jpg')
