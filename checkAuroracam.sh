@@ -26,8 +26,8 @@ do
                     logger -s -t checkAuroracam "camera seems dead"
                 fi
             else
-                logger -s -t checkAuroracam "camera ok, likely software failure, rebooting"
-                sudo reboot
+                logger -s -t checkAuroracam "camera ok, likely software failure, restarting"
+                systemctl --user restart auroracam
             fi
         fi
     fi
