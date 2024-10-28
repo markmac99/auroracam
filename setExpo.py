@@ -78,16 +78,17 @@ def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp
     cam.set_info("AVEnc.VideoWidget", info)
 
     # disable remote-access from China
-    #info = cam.get_info("NetWork.Nat") 
-    #info["NatEnable"] = False
-    #cam.set_info("NetWork.Nat", info)
+    info = cam.get_info("NetWork.Nat") 
+    info["NatEnable"] = False
+    cam.set_info("NetWork.Nat", info)
 
     # set video mode to 720p, H.264, 25fps
-    #params = cam.get_info("Simplify.Encode")
-    #params[0]['MainFormat']['Video']['Compression'] = 'H.264'
-    #params[0]['MainFormat']['Video']['Resolution'] = '720P'
-    #params[0]['MainFormat']['Video']['FPS'] = 25
-    #cam.set_info("Simplify.Encode", params)
+    params = cam.get_info("Simplify.Encode")
+    params[0]['MainFormat']['Video']['Compression'] = 'H.264'
+    params[0]['MainFormat']['Video']['Resolution'] = '720P'
+    params[0]['MainFormat']['FPS'] = 25
+    params[0]['MainFormat']['Quality'] = 6
+    cam.set_info("Simplify.Encode", params)
 
     # i think everything else can be left at the defaults
 
