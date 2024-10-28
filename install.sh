@@ -25,8 +25,8 @@ sudo chmod 666 /etc/lighttpd/lighttpd.conf
 echo server.dir-listing = \"enable\" >> /etc/lighttpd/lighttpd.conf 
 sudo chmod 644 /etc/lighttpd/lighttpd.conf
 sudo systemctl restart lighttpd
+fi 
 sudo cp auroracam.service /etc/systemd/user
 systemctl --user daemon-reload
 systemctl --user enable auroracam
 systemctl --user start auroracam
-fi 
