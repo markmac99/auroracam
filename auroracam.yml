@@ -114,12 +114,6 @@
       path: '{{destdir}}/config.ini'
       regexp: 'ARCHKEY='
       line: 'ARCHKEY=~/.ssh/markskey.pem'
-  # html index
-  - name: update HTML index file
-    ansible.builtin.replace:
-      path: "{{destdir}}/index.html"
-      regexp: 'DATADIR'
-      replace: 'data'
 
   - name: make sure modules are downloaded
     shell: source ~/vAuroracam/bin/activate && pip install -r {{destdir}}/requirements.txt
