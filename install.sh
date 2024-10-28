@@ -1,7 +1,7 @@
 #!/bin/bash
 # copyright mark mcintyre, 2024-
 
-sudo apt-get install -y python3-opencv lighttpd virtualenv
+sudo apt-get install -y python3-opencv lighttpd virtualenv vim
 virtualenv ~/vAuroracam  
 source ~/vAuroracam/bin/activate  
 pip install --upgrade pip
