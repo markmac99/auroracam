@@ -303,7 +303,7 @@ def annotateImageArbitrary(img_path, message, color='#000'):
     my_image = Image.open(img_path)
     width, height = my_image.size
     image_editable = ImageDraw.Draw(my_image)
-    fntheight=30
+    fntheight=20
     try:
         fnt = ImageFont.truetype("arial.ttf", fntheight)
     except Exception:
