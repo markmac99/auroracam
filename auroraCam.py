@@ -701,7 +701,7 @@ if __name__ == '__main__':
         capdirbase = os.path.split(capdirname)[1]
         existingfolder = glob.glob(os.path.join('/home/mark/data/auroracam', capdirbase[:-2]+'*'))
         if len(existingfolder) > 0:
-            capdirname = existingfolder
+            capdirname = existingfolder[0]
 
         if daytimelapse or isnight: 
             os.makedirs(capdirname, exist_ok=True)
