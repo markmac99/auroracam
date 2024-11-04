@@ -30,3 +30,5 @@ sudo cp auroracam.service /etc/systemd/user
 systemctl --user daemon-reload
 systemctl --user enable auroracam
 systemctl --user start auroracam
+loginctl enable-linger
+
