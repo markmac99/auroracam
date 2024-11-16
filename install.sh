@@ -10,7 +10,7 @@ mkdir -p ~/data/{auroracam,logs}
 chmod 755 ~
 cd ~/source/auroracam
 [ -f config.ini ] && mv config.ini config.bkp
-flist=(startAuroraCam.sh auroraCam.py config.ini setExpo.py sendToYoutube.py makeImageIndex.py imgindex.html.template index.html redoTimelapse.py mqtt.cfg requirements.txt auroracam.service) 
+flist=(startAuroraCam.sh auroraCam.py config.ini setExpo.py sendToYoutube.py makeImageIndex.py imgindex.html.template index.html redoTimelapse.py mqtt.cfg requirements.txt auroracam.service makeMP4.sh) 
 for f in ${flist[@]} ; do
 [ -f ${f} ] && rm ${f}
 wget https://raw.githubusercontent.com/markmac99/auroracam/refs/heads/master/${f}  
