@@ -546,6 +546,11 @@ def makeTimelapse(dirname, s3, camname, bucket, daytimelapse=False, maketimelaps
         log.info(f'making timelapse of {dirname}')
         subprocess.call([cmdline], shell=True)
         log.info('done')
+        tlnames = glob.glob1(mp4name)
+        if len(tlnames) > 0:
+            log.info(f'saved to {tlnames[0]}')
+        else:
+            log.warning(f'problem creating {mp4name}')
     if s3 is not None:
         if daytimelapse:
             targkey = f'{camname}/{mp4shortname[:6]}/{camname}_{mp4shortname}_day.mp4'

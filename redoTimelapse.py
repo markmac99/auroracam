@@ -21,6 +21,10 @@ ulloc = thiscfg['uploads']['s3uploadloc']
 camid = thiscfg['auroracam']['camid']
 datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
 hostname = platform.uname().node
+if int(thiscfg['youtube']['doupload']) == 1:
+    doyoutube = True
+else:
+    doyoutube = False
 
 setupLogging(thiscfg)
 if ulloc[:5] == 's3://':
@@ -33,4 +37,4 @@ else:
     bucket = None
 dirname = os.path.join(datadir, dirpath)
                           
-makeTimelapse(dirname, s3, camid, bucket, daytimelapse=False, maketimelapse=force)
+makeTimelapse(dirname, s3, camid, bucket, daytimelapse=False, maketimelapse=force, youtube=doyoutube)
