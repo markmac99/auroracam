@@ -232,6 +232,30 @@ def compressAndUpload(thiscfg, thisdir):
     
     return archname
 
+
+def purgeLogs(thiscfg):
+    logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
+    days_to_keep = 30
+    date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
+    date_to_purge_to = date_to_purge_to.timestamp(date_to_purge_to)
+
+    # Only going to purge RMS log files
+    flist = glob.glob1(logdir, '*.log*')
+    for fl in flist:
+        log_file_path = os.path.join(logdir, fl)
+        # Check if the file exists and check if it should be purged
+        if os.path.isfile(log_file_path):
+            # Get the file modification time
+            file_mtime = os.stat(log_file_path).st_mtime
+            # If the file is older than the date to purge to, delete it
+            if file_mtime < date_to_purge_to:
+                try:
+                    os.remove(log_file_path)
+                    log.info("deleted {}".format(fl))
+                except Exception as e:
+                    log.warning('unable to delete {}: '.format(log_file_path) + repr(e)) 
+    return 
+
  
 def freeSpaceAndArchive(thiscfg):
     """
@@ -285,6 +309,8 @@ def freeSpaceAndArchive(thiscfg):
         compressAndDelete(thiscfg, dir)
         freekb = getFreeSpace()
         log.info(f'free space now {freekb}')
+
+    purgeLogs(thiscfg)
     log.info('finished')
     return True
 
