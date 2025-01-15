@@ -238,7 +238,7 @@ def purgeLogs(thiscfg):
     days_to_keep = 30
     date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
     date_to_purge_to = date_to_purge_to.timestamp(date_to_purge_to)
-
+    log.info(f'purging logs older than {days_to_keep}')
     # Only going to purge RMS log files
     flist = glob.glob1(logdir, '*.log*')
     for fl in flist:
@@ -256,7 +256,7 @@ def purgeLogs(thiscfg):
                     log.warning('unable to delete {}: '.format(log_file_path) + repr(e)) 
     return 
 
- 
+
 def freeSpaceAndArchive(thiscfg):
     """
     Free up space by compressing and deleting older data. 
@@ -310,7 +310,10 @@ def freeSpaceAndArchive(thiscfg):
         freekb = getFreeSpace()
         log.info(f'free space now {freekb}')
 
-    purgeLogs(thiscfg)
+    try: 
+        purgeLogs(thiscfg)
+    except Exception as e:
+        print(e)
     log.info('finished')
     return True
 
@@ -572,7 +575,7 @@ def makeTimelapse(dirname, s3, camname, bucket, daytimelapse=False, maketimelaps
         log.info(f'making timelapse of {dirname}')
         subprocess.call([cmdline], shell=True)
         log.info('done')
-        tlnames = glob.glob1(mp4name)
+        tlnames = glob.glob(mp4name)
         if len(tlnames) > 0:
             log.info(f'saved to {tlnames[0]}')
         else:
