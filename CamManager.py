@@ -15,76 +15,52 @@ copies or substantial portions of the Software.
 
 # based on https://github.com/OpenIPC/python-dvr/blob/master/DeviceManager.py
 """
-
 from __future__ import print_function, unicode_literals, division, absolute_import
 
-import os
 import sys
+if sys.version_info[0] < 3:
+    print("This script cannot run on Python 2.")
+    sys.exit(1)
+
+import os
 import struct
+import fcntl
 import json
-try: 
-    import fcntl
-except:
-    pass
 from locale import getlocale
 from subprocess import check_output
-import socket 
+from socket import socket, inet_aton, inet_ntoa, if_nameindex
+from socket import SOL_SOCKET, SO_REUSEADDR, SO_BROADCAST, IP_MULTICAST_TTL, SOCK_DGRAM, AF_INET, IPPROTO_UDP, IPPROTO_IP
 import platform
-import datetime
+from datetime import datetime
 import hashlib
 
-#try:
-#    from dvrip import DVRIPCam
-#except ImportError:
-#    print("Exiting: dvrip module not found. This script cannot run on Python 2.")
-#    sys.exit(1)
+try:
+    from dvrip import DVRIPCam
+except ImportError:
+    print("Exiting: dvrip module not found.")
+    sys.exit(1)
 
 try:
-    if sys.version_info[0] == 3:
-        import tkinter as Tk
-    else:
-        import Tkinter as Tk
-    from tkinter.filedialog import asksaveasfilename, askopenfilename
+    from tkinter import Tk, PhotoImage, Frame, Scrollbar, Menu, Label, Entry, Button
+    from tkinter import VERTICAL, HORIZONTAL, W, N, END, YES, BOTH
+
+    from tkinter.filedialog import asksaveasfilename
     from tkinter.messagebox import showerror
-    import tkinter.ttk as ttk
+    from tkinter.ttk import Treeview, Style, Combobox
 
     GUI_TK = True
 except:
     GUI_TK = False
 
-# list of preffered interfaces - camera is supposed to be connected to a wired interface
-intfs = ['eth0', 'eno1']
-devices = {}
+# set app to None, so we can test later if its been initialised
+app = None
+
+# initialise other globals
 log = "search.log"
-icon = "R0lGODlhIAAgAPcAAAAAAAkFAgwKBwQBABQNBRAQDQQFERAOFA4QFBcWFSAaFCYgGAoUMhwiMSUlJCsrKyooJy8wLjUxLjkzKTY1Mzw7OzY3OEpFPwsaSRsuTRUsWD4+QCo8XQAOch0nYB05biItaj9ARjdHYiRMfEREQ0hIR0xMTEdKSVNOQ0xQT0NEUVFNUkhRXlVVVFdYWFxdXFtZVV9wXGZjXUtbb19fYFRda19gYFZhbF5wfWRkZGVna2xsa2hmaHFtamV0Ynp2aHNzc3x8fHh3coF9dYJ+eH2Fe3K1YoGBfgIgigwrmypajDtXhw9FpxFFpSdVpzlqvFNzj0FvnV9zkENnpUh8sgdcxh1Q2jt3zThi0SJy0Dl81Rhu/g50/xp9/x90/zB35TJv8DJ+/EZqzj2DvlGDrlqEuHqLpHeQp26SuhqN+yiC6imH/zSM/yqa/zeV/zik/1aIwlmP0mmayWSY122h3VWb6kyL/1yP8UGU/UiW/VWd/miW+Eqp/12k/1Co/1yq/2Gs/2qr/WKh/nGv/3er9mK3/3K0/3e4+4ODg4uLi4mHiY+Qj5WTjo+PkJSUlJycnKGem6ShnY2ZrKOjo6urrKqqpLi0prS0tLu8vMO+tb+/wJrE+bzf/sTExMfIx8zMzMjIxtrWyM/Q0NXU1NfY193d3djY1uDf4Mnj+931/OTk5Ozs7O/v8PLy8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAAAALAAAAAAgACAAAAj+AAEIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mgx4iVMnTyJInVKlclSpD550nRpUqKGmD59EjWqlMlVOFWdIgWq0iNNoBIhSujokidPn0aNKrmqVStWqjxRumTqyI5KOxI5OpiIkiakNG2yelqK5alKLSAJgbBBB6RIjArmCKLIkV1HjyZNpTTJFKgSQoI4cGBiBxBIR6QM6TGQxooWL3LwMBwkSJEcLUq8YATDAZAdMkKh+GGpAo0cL1wInJuokSNIeqdeCgLBAoVMR2CEMkHDzAcnTCzsCAKERwsXK3wYKYLIdd6pjh4guCGJw5IpT7R8CeNlCwsikx7+JTJ+PAZlRHXxOgqBAQMTLXj0AAKkJw+eJw6CXGqJyAWNyT8QgZ5rsD2igwYEOOEGH38EEoghgcQhQgJAxISJI/8ZNoQUijiX1yM7NIBAFm3wUcghh9yBhQcCFEBDJ6V8MskKhgERxBGMMILXI7AhsoAAGSgRBRlliLHHHlZgMAAJmLByCiUnfGajFEcgotVzjkhggAYjjBHFFISgkoodSDAwAyStqDIJAELs4CYQQxChVSRTQcJCFWmUyAcghmzCCRgdXCEHEU69VJiNdDmnV0s4rNHFGmzgkUcfhgiShAd0nNHDVAc9YIEFFWxAQgkVpKAGF1yw4UYdc6AhhQohJFiwQAIRPQCHFlRAccMJFCRAgAAVJXDBBAsQEEBHDwUEADs="
-help = """
-    Usage: %s [-q] [-n] [Command];[Command];...
-    -q				No output
-    -n				No gui
-    -i [intf]       specify interface eg eth0, wlan0
-    Command			Description
-
-    help			This help
-    echo			Just echo
-    log [filename]		Set log file
-    logLevel [0..100]	Set log verbosity
-    search [brand]		Searching devices of [brand] or all
-    table			Table of devices
-    json			JSON String of devices
-    device [MAC]		JSON String of [MAC]
-    config [MAC] [IP] [MASK] [GATE] [Pasword]   - Configure searched divice
-    """ % os.path.basename(
-    sys.argv[0]
-)
-lang, charset = getlocale()
-
-#locale = {'utf-8'}
-
-#def _(msg):
-#    if lang in locale.keys():
-#        if msg in locale[lang].keys():
-#            return locale[lang][msg]
-#    return msg
+logLevel = 20
+devices = {}
+searchers = {}
+configure = {}
 
 
 CODES = {
@@ -156,7 +132,7 @@ def tolog(s):
 
 
 def get_nat_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s = socket(AF_INET, SOCK_DGRAM)
     try:
         # doesn't even have to be reachable
         s.connect(("10.255.255.255", 1))
@@ -170,30 +146,21 @@ def get_nat_ip():
 
 def local_ip():
     ip = get_nat_ip()
-    ipn = struct.unpack(">I", socket.inet_aton(ip))
+    ipn = struct.unpack(">I", inet_aton(ip))
     return (
-        socket.inet_ntoa(struct.pack(">I", ipn[0] + 10)),
+        inet_ntoa(struct.pack(">I", ipn[0] + 10)),
         "255.255.255.0",
-        socket.inet_ntoa(struct.pack(">I", (ipn[0] & 0xFFFFFF00) + 1)),
+        inet_ntoa(struct.pack(">I", (ipn[0] & 0xFFFFFF00) + 1)),
     )
 
 
 def get_ip_address(ifname):
-    if sys.platform != 'win32':
-        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        ipadd = fcntl.ioctl(
-            server.fileno(),
-            0x8915,  # SIOCGIFADDR
-            struct.pack('256s', bytes(ifname[:15], 'utf-8')))[20:24]
-        server.close()
-        return socket.inet_ntoa(ipadd)
-    else:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0)
-        s.connect(("8.8.8.8", 80))
-        ipaddr = s.getsockname()[0]
-        s.close()
-        return ipaddr
+    server = socket(AF_INET, SOCK_DGRAM)
+    return inet_ntoa(fcntl.ioctl(
+        server.fileno(),
+        0x8915,  # SIOCGIFADDR
+        struct.pack('256s', bytes(ifname[:15], 'utf-8'))
+    )[20:24])
 
 
 def sofia_hash(password):
@@ -203,14 +170,16 @@ def sofia_hash(password):
 
 
 def GetIP(s):
-    return socket.inet_ntoa(struct.pack("I", int(s, 16)))
+    return inet_ntoa(struct.pack("I", int(s, 16)))
 
 
 def SetIP(ip):
-    return "0x%08X" % struct.unpack("I", socket.inet_aton(ip))
+    return "0x%08X" % struct.unpack("I", inet_aton(ip))
 
 
 def GetAllAddr():
+    # better to do this with something like netifaces-plus. 
+    # will rework it later
     if os.name == "nt":
         return [
             x.split(":")[1].strip()
@@ -228,30 +197,51 @@ def GetAllAddr():
         ]
 
 
-def SearchXM(devices):
-    # pick the first wired interface
-    det_intfs = list(zip(*socket.if_nameindex()))[1]
-    print("detected network interfaces:", det_intfs)
-    intfsf = list(filter(lambda i: i in intfs, det_intfs))       
-    print("prefferd interfaces:", intfsf)
-    intf = intfsf[0]
-    server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+def GetInterfaces(checkip=False):
+    # if the GUI is initialised, just read the list of interfaces from the dropdown
+    if app is not None:
+        return [app.intf.get()]
     
-    # hack to use eth0 interface instantly
+    # otherwise find the active interfaces. This is linux-specific. 
+    det_intfs = list(zip(*if_nameindex()))[1]
+    det_intfs = list(det_intfs)
+    det_intfs.remove('lo')
+    print("detected network interfaces:", det_intfs)
+    if checkip:
+        for intf in det_intfs:
+            try:
+                _ = get_ip_address(intf)
+            except Exception:
+                print('no ip address for ', intf)
+                det_intfs.remove(intf)
+    if len(det_intfs) == 0:
+        return ['None']
+    return det_intfs
+
+
+def SearchXM():
+
+    server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+    intf = GetInterfaces(checkip=True)[0]
     print("Interface:", intf)
-    print("IP:", get_ip_address(intf))
+    try:
+        ip = get_ip_address(intf)
+    except:
+        ip = ''
+        print("Error during IP estimation, interface up?")
+
+    print("IP:", ip)
     server.bind(('', 34569))
-    print("binded")
+    print("socket bound")
     server.settimeout(3)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    if sys.platform != 'win32':
-        server.setsockopt(socket.SOL_SOCKET, 25, intf.encode('utf-8') + '\0'.encode('utf-8'))
-    server.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+    server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    server.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+    # fix for RMS Buster distro, as UTF-8 support is missing
+    server.setsockopt(SOL_SOCKET, 25, intf.encode('utf-8') + '\0'.encode('utf-8'))
+    server.setsockopt(IPPROTO_IP, IP_MULTICAST_TTL, 1)
     server.sendto(
         struct.pack("BBHIIHHI", 255, 0, 0, 0, 0, 0, 1530, 0), ("255.255.255.255", 34569)
     )
-    print("sent")
     while True:
         data = server.recvfrom(1024)
         head, ver, typ, session, packet, info, msg, leng = struct.unpack(
@@ -259,7 +249,7 @@ def SearchXM(devices):
         )
         if (msg == 1531) and leng > 0:
             answer = json.loads(
-                data[0][20:20 + leng].replace(b"\x00", b""))
+                data[0][20: 20 + leng].replace(b"\x00", b""))
             if answer["NetWork.NetCommon"]["MAC"] not in devices.keys():
                 devices[answer["NetWork.NetCommon"]["MAC"]] = answer[
                     "NetWork.NetCommon"
@@ -269,44 +259,63 @@ def SearchXM(devices):
     return devices
 
 
-def ConfigXM(data):
+def ConfigXM(data, debug=False):
+
+    intf = GetInterfaces(checkip=True)[0]
+    print("Interface:", intf)
+    try:
+        ip = get_ip_address(intf)
+    except Exception:
+        ip = ''
+        print("Error during IP estimation, interface up?")
+
+    print("IP:", ip)
+
     config = {}
     #TODO: may be just copy whwole devices[data[1]] to config?
     for k in [u"HostName",u"HttpPort",u"MAC",u"MaxBps",u"MonMode",u"SSLPort",u"TCPMaxConn",u"TCPPort",u"TransferPlan",u"UDPPort","UseHSDownLoad"]:
         if k in devices[data[1]]:
             config[k] = devices[data[1]][k]
-    print(devices[data[1]][u"HostName"])
+    print('Remote host:', devices[data[1]][u"HostName"])
     config[u"DvrMac"] = devices[data[1]][u"MAC"]
     config[u"EncryptType"] = 1
     config[u"GateWay"] = SetIP(data[4])
     config[u"HostIP"] = SetIP(data[2])
     config[u"Submask"] = SetIP(data[3])
     config[u"Username"] = "admin"
-    config[u"Password"] = sofia_hash(data[5])
+    if len(data) > 5:
+        passwd = sofia_hash(data[5])
+    else:
+        passwd = sofia_hash('')
+    config[u"Password"] = passwd
     devices[data[1]][u"GateWay"] = config[u"GateWay"]
     devices[data[1]][u"HostIP"] = config[u"HostIP"]
     devices[data[1]][u"Submask"] = config[u"Submask"]
     config = json.dumps(
         config, ensure_ascii=False, sort_keys=True, separators=(", ", " : ")
     ).encode("utf8")
-    server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     server.bind(("", 34569))
     server.settimeout(1)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+    server.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+    server.setsockopt(SOL_SOCKET, 25, intf.encode('utf-8') + '\0'.encode('utf-8'))
+    server.setsockopt(IPPROTO_IP, IP_MULTICAST_TTL, 1)
     clen = len(config)
-    print(struct.pack(
-        "BBHIIHHI%ds2s" % clen,
-        255,
-        0,
-        254,
-        0,
-        0,
-        0,
-        1532,
-        clen + 2,
-        config,
-        b"\x0a\x00",),)
+    if debug:
+        print(struct.pack(
+            "BBHIIHHI%ds2s" % clen,
+            255,
+            0,
+            254,
+            0,
+            0,
+            0,
+            1532,
+            clen + 2,
+            config,
+            b"\x0a\x00",
+        ),)
     server.sendto(
         struct.pack(
             "BBHIIHHI%ds2s" % clen,
@@ -323,30 +332,40 @@ def ConfigXM(data):
         ),
         ("255.255.255.255", 34569),
     )
-    answer = {"Ret": 203}
+    answer = {"Ret": 101}
     e = 0
     while True:
         try:
             data = server.recvfrom(1024)
-            head, ver, typ, session, packet, info, msg, leng = struct.unpack(
-                "BBHIIHHI", data[0][:20]
-            )
+            _, _, _, _, _, _, msg, leng = struct.unpack("BBHIIHHI", data[0][:20])
+            if debug:
+                print(data)
             if (msg == 1533) and leng > 0:
-                answer = json.loads(
-                    data[0][20:20 + leng].replace(b"\x00", b""))
+                answer = json.loads(data[0][20: 20 + leng].replace(b"\x00", b""))
                 break
         except:
             e += 1
             if e > 3:
                 break
     server.close()
+    if 'Ret' in answer and answer['Ret'] == 100:
+        print("Success")
     return answer
 
 
+def FlashXM(cmd):
+    cam = DVRIPCam(GetIP(devices[cmd[1]]["HostIP"]), "admin", cmd[2])
+    if cam.login():
+        cmd[4]("Auth success")
+        cam.upgrade(cmd[3], 0x4000, cmd[4])
+    else:
+        cmd[4]("Auth failed")
+
+
 def ProcessCMD(cmd):
-    global log, logLevel, devices, searchers, configure, flashers
+    global log, logLevel, devices, searchers, configure
     if logLevel == 20:
-        tolog(datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S] >") + " ".join(cmd))
+        tolog(datetime.now().strftime("[%Y-%m-%d %H:%M:%S] >") + " ".join(cmd))
     if cmd[0].lower() == "q" or cmd[0].lower() == "quit":
         sys.exit(1)
     if cmd[0].lower() in ["help", "?", "/?", "-h", "--help"]:
@@ -355,7 +374,7 @@ def ProcessCMD(cmd):
         tolog("%s" % ("Search"))
         if len(cmd) > 1 and cmd[1].lower() in searchers.keys():
             try:
-                devices = searchers[cmd[1].lower()](devices)
+                devices = searchers[cmd[1].lower()]()
             except Exception as error:
                 print(" ".join([str(x) for x in list(error.args)]))
             print("Searching %s, found %d devices" % (cmd[1], len(devices)))
@@ -363,7 +382,7 @@ def ProcessCMD(cmd):
             for s in searchers:
                 tolog("Search" + " %s\r" % s)
                 try:
-                    devices = searchers[s](devices)
+                    devices = searchers[s]()
                 except Exception as error:
                     print(" ".join([str(x) for x in list(error.args)]))
             tolog("Found %d devices" % len(devices))
@@ -396,10 +415,21 @@ def ProcessCMD(cmd):
             tolog(logs)
         if logLevel >= 10:
             return logs
-        if logLevel < 10:
-            print(logs)
     if cmd[0].lower() == "csv":
-        logs = "Vendor;MAC Address;Name;IP Address;Port;SN\n"
+        logs = (
+            "Vendor"
+            + ";"
+            + "MAC Address"
+            + ";"
+            + "Name"
+            + ";"
+            + "IP Address"
+            + ";"
+            + "Port"
+            + ";"
+            + "SN"
+            + "\n"
+        )
         for dev in devices:
             logs += "%s;%s;%s;%s;%s;%s\n" % (
                 devices[dev]["Brand"],
@@ -460,25 +490,14 @@ def ProcessCMD(cmd):
             
     if cmd[0].lower() == "config":
         if (
-            len(cmd) > 5
+            len(cmd) > 4
             and cmd[1] in devices.keys()
             and devices[cmd[1]]["Brand"] in configure.keys()
         ):
-            return configure[devices[cmd[1]]["Brand"]](cmd)
+            return configure[devices[cmd[1]]["Brand"]](cmd, logLevel>30)
         else:
             return "config [MAC] [IP] [MASK] [GATE] [Pasword]"
     
-    if cmd[0].lower() == "flash":
-        if (
-            len(cmd) > 3
-            and cmd[1] in devices.key(s)
-            and devices[cmd[1]]["Brand"] in flashers.keys()
-        ):
-            if len(cmd) == 4:
-                cmd[4] = tolog
-            return flashers[devices[cmd[1]]["Brand"]](cmd)
-        else:
-            return "flash [MAC] [password] [file]"
     if cmd[0].lower() == "loglevel":
         if len(cmd) > 1:
             logLevel = int(cmd[1])
@@ -499,25 +518,25 @@ class GUITk:
     def __init__(self, root):
         self.root = root
         self.root.wm_title("RMS Camera Hunter")
-        self.root.tk.call("wm", "iconphoto", root._w, Tk.PhotoImage(data=icon))
-        self.f = Tk.Frame(self.root)
-        self.f.pack(fill=Tk.BOTH, expand=Tk.YES)
+        self.root.tk.call("wm", "iconphoto", root._w, PhotoImage(data=icon))
+        self.f = Frame(self.root)
+        self.f.pack(fill=BOTH, expand=YES)
 
         self.f.columnconfigure(0, weight=1)
         self.f.rowconfigure(0, weight=1)
 
-        self.fr = Tk.Frame(self.f)
+        self.fr = Frame(self.f)
         self.fr.grid(row=0, column=0, columnspan=3, sticky="nsew")
-        self.fr_tools = Tk.Frame(self.f)
+        self.fr_tools = Frame(self.f)
         self.fr_tools.grid(row=1, column=0, columnspan=6, sticky="ew")
-        self.fr_config = Tk.Frame(self.f)
+        self.fr_config = Frame(self.f)
         self.fr_config.grid(row=0, column=5, sticky="nsew")
 
         self.fr.columnconfigure(0, weight=1)
         self.fr.rowconfigure(0, weight=1)
 
-        self.table = ttk.Treeview(self.fr, show="headings", selectmode="browse", height=8)
-        self.table.grid(column=0, row=0, sticky="nsew")
+        self.table = Treeview(self.fr, show="headings", selectmode="browse", height=8)
+        self.table.grid(column=0, row=0, padx=5, sticky="nsew")
         self.table["columns"] = ("ID", "vendor", "addr", "port", "name", "mac", "sn")
         self.table["displaycolumns"] = ("addr", "name", "mac", "sn")
 
@@ -535,10 +554,10 @@ class GUITk:
         self.table.column("mac", stretch=0, width=130)
         self.table.column("sn", stretch=0, width=120)
 
-        self.scrollY = Tk.Scrollbar(self.fr, orient=Tk.VERTICAL)
+        self.scrollY = Scrollbar(self.fr, orient=VERTICAL)
         self.scrollY.config(command=self.table.yview)
         self.scrollY.grid(row=0, column=1, sticky="ns")
-        self.scrollX = Tk.Scrollbar(self.fr, orient=Tk.HORIZONTAL)
+        self.scrollX = Scrollbar(self.fr, orient=HORIZONTAL)
         self.scrollX.config(command=self.table.xview)
         self.scrollX.grid(row=1, column=0, sticky="ew")
         self.table.config(
@@ -546,7 +565,7 @@ class GUITk:
         )
 
         self.table.bind("<ButtonRelease>", self.select)
-        self.popup_menu = Tk.Menu(self.table, tearoff=0)
+        self.popup_menu = Menu(self.table, tearoff=0)
         self.popup_menu.add_command(
             label="Copy SN",
             command=lambda: (
@@ -573,54 +592,47 @@ class GUITk:
         )
         self.table.bind("<Button-3>", self.popup)
 
-        self.l0 = Tk.Label(self.fr_config, text="Name")
-        self.l0.grid(row=0, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.name = Tk.Entry(self.fr_config, width=15, font="6")
-        self.name.grid(row=0, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.l1 = Tk.Label(self.fr_config, text="IP Address")
-        self.l1.grid(row=1, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.addr = Tk.Entry(self.fr_config, width=15, font="6")
-        self.addr.grid(row=1, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.l2 = Tk.Label(self.fr_config, text="Mask")
-        self.l2.grid(row=2, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.mask = Tk.Entry(self.fr_config, width=15, font="6")
-        self.mask.grid(row=2, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.l3 = Tk.Label(self.fr_config, text="Gateway")
-        self.l3.grid(row=3, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.gate = Tk.Entry(self.fr_config, width=15, font="6")
-        self.gate.grid(row=3, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.aspc = Tk.Button(self.fr_config, text="As on PC", command=self.addr_pc)
-        #self.aspc.grid(row=4, column=1, pady=3, padx=5, sticky="ew")
-        self.l4 = Tk.Label(self.fr_config, text="HTTP Port")
-        #self.l4.grid(row=5, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.http = Tk.Entry(self.fr_config, width=5, font="6")
-        #self.http.grid(row=5, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.l5 = Tk.Label(self.fr_config, text="TCP Port")
-        #self.l5.grid(row=6, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.tcp = Tk.Entry(self.fr_config, width=5, font="6")
-        #self.tcp.grid(row=6, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.l6 = Tk.Label(self.fr_config, text="Password")
-        self.l6.grid(row=7, column=0, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.passw = Tk.Entry(self.fr_config, width=15, font="6")
-        self.passw.grid(row=7, column=1, pady=3, padx=5, sticky=Tk.W + Tk.N)
-        self.aply = Tk.Button(self.fr_config, text="Apply", command=self.setconfig)
+        self.l0 = Label(self.fr_config, text="Name")
+        self.l0.grid(row=0, column=0, pady=3, padx=5, sticky=W + N)
+        self.name = Entry(self.fr_config, width=15, font="6")
+        self.name.grid(row=0, column=1, pady=3, padx=5, sticky=W + N)
+        self.l1 = Label(self.fr_config, text="IP Address")
+        self.l1.grid(row=1, column=0, pady=3, padx=5, sticky=W + N)
+        self.addr = Entry(self.fr_config, width=15, font="6")
+        self.addr.grid(row=1, column=1, pady=3, padx=5, sticky=W + N)
+        self.l2 = Label(self.fr_config, text="Mask")
+        self.l2.grid(row=2, column=0, pady=3, padx=5, sticky=W + N)
+        self.mask = Entry(self.fr_config, width=15, font="6")
+        self.mask.grid(row=2, column=1, pady=3, padx=5, sticky=W + N)
+        self.l3 = Label(self.fr_config, text="Gateway")
+        self.l3.grid(row=3, column=0, pady=3, padx=5, sticky=W + N)
+        self.gate = Entry(self.fr_config, width=15, font="6")
+        self.gate.grid(row=3, column=1, pady=3, padx=5, sticky=W + N)
+        self.aspc = Button(self.fr_config, text="As on PC", command=self.addr_pc)
+        self.l4 = Label(self.fr_config, text="HTTP Port")
+        self.http = Entry(self.fr_config, width=5, font="6")
+        self.l5 = Label(self.fr_config, text="TCP Port")
+        self.tcp = Entry(self.fr_config, width=5, font="6")
+        self.l6 = Label(self.fr_config, text="Password")
+        self.l6.grid(row=7, column=0, pady=3, padx=5, sticky=W + N)
+        self.passw = Entry(self.fr_config, width=15, font="6")
+        self.passw.grid(row=7, column=1, pady=3, padx=5, sticky=W + N)
+        self.aply = Button(self.fr_config, text="Apply", command=self.setconfig)
         self.aply.grid(row=8, column=1, pady=3, padx=5, sticky="ew")
-
-        #self.l7 = Label(self.fr_tools, text=_("Vendor"))
-        #self.l7.grid(row=0, column=0, pady=3, padx=5, sticky="wns")
-        self.ven = ttk.Combobox(self.fr_tools, width=10)
-        #self.ven.grid(row=0, column=1, padx=5, sticky="w")
+        self.ven = Combobox(self.fr_tools, width=10)
         self.ven["values"] = ["XM",]
         self.ven.current(0)
-        self.search = Tk.Button(self.fr_tools, text="Search", command=self.search)
-        self.search.grid(row=0, column=2, pady=5, padx=5, sticky=Tk.W + Tk.N)
-        self.reset = Tk.Button(self.fr_tools, text="Reset", command=self.clear)
-        self.reset.grid(row=0, column=3, pady=5, padx=5, sticky=Tk.W + Tk.N)
-        self.exp = Tk.Button(self.fr_tools, text="Export", command=self.export)
-        self.exp.grid(row=0, column=4, pady=5, padx=5, sticky=Tk.W + Tk.N)
-        #self.fl_state = StringVar(value=_("Flash"))
-        #self.fl = Button(self.fr_tools, textvar=self.fl_state, command=self.flash)
-        #self.fl.grid(row=0, column=5, pady=5, padx=5, sticky=W + N)
+        self.l8 = Label(self.fr_tools, text="Interface", width=10)
+        self.intf = Combobox(self.fr_tools, width=10)
+        self.intf.grid(column=1, padx=5)
+        self.intf['values'] = GetInterfaces()
+        self.intf.current(newindex=0)
+        self.search = Button(self.fr_tools, text="Search", command=self.search)
+        self.search.grid(row=0, column=2, pady=5, padx=5, sticky=W + N)
+        self.reset = Button(self.fr_tools, text="Reset", command=self.clear)
+        self.reset.grid(row=0, column=3, pady=5, padx=5, sticky=W + N)
+        self.exp = Button(self.fr_tools, text="Export", command=self.export)
+        self.exp.grid(row=0, column=4, pady=5, padx=5, sticky=W + N)
 
     def popup(self, event):
         try:
@@ -630,19 +642,16 @@ class GUITk:
 
     def addr_pc(self):
         _addr, _mask, _gate = local_ip()
-        self.addr.delete(0, Tk.END)
-        self.addr.insert(Tk.END, _addr)
-        self.mask.delete(0, Tk.END)
-        self.mask.insert(Tk.END, _mask)
-        self.gate.delete(0, Tk.END)
-        self.gate.insert(Tk.END, _gate)
+        self.addr.delete(0, END)
+        self.addr.insert(END, _addr)
+        self.mask.delete(0, END)
+        self.mask.insert(END, _mask)
+        self.gate.delete(0, END)
+        self.gate.insert(END, _gate)
 
     def search(self):
         self.clear()
-        #if self.ven["values"].index(self.ven.get()) == 0:
         ProcessCMD(["search"])
-        #else:
-        #    ProcessCMD(["search", self.ven.get()])
         self.pop()
 
     def pop(self):
@@ -673,18 +682,18 @@ class GUITk:
         dev = self.table.item(self.table.selection()[0], option="values")[0]
         if logLevel >= 20:
             print(json.dumps(devices[dev], indent=4, sort_keys=True))
-        self.name.delete(0, Tk.END)
-        self.name.insert(Tk.END, devices[dev]["HostName"])
-        self.addr.delete(0, Tk.END)
-        self.addr.insert(Tk.END, GetIP(devices[dev]["HostIP"]))
-        self.mask.delete(0, Tk.END)
-        self.mask.insert(Tk.END, GetIP(devices[dev]["Submask"]))
-        self.gate.delete(0, Tk.END)
-        self.gate.insert(Tk.END, GetIP(devices[dev]["GateWay"]))
-        self.http.delete(0, Tk.END)
-        self.http.insert(Tk.END, devices[dev]["HttpPort"])
-        self.tcp.delete(0, Tk.END)
-        self.tcp.insert(Tk.END, devices[dev]["TCPPort"])
+        self.name.delete(0, END)
+        self.name.insert(END, devices[dev]["HostName"])
+        self.addr.delete(0, END)
+        self.addr.insert(END, GetIP(devices[dev]["HostIP"]))
+        self.mask.delete(0, END)
+        self.mask.insert(END, GetIP(devices[dev]["Submask"]))
+        self.gate.delete(0, END)
+        self.gate.insert(END, GetIP(devices[dev]["GateWay"]))
+        self.http.delete(0, END)
+        self.http.insert(END, devices[dev]["HttpPort"])
+        self.tcp.delete(0, END)
+        self.tcp.insert(END, devices[dev]["TCPPort"])
 
     def setconfig(self):
         dev = self.table.item(self.table.selection()[0], option="values")[0]
@@ -715,7 +724,7 @@ class GUITk:
                 ),
             )
         else:
-            showerror("Error"), CODES[result["Ret"]]
+            showerror("Error", CODES[result["Ret"]])
 
     def export(self):
         filename = asksaveasfilename(
@@ -740,69 +749,65 @@ class GUITk:
             ProcessCMD(["table"])
         ProcessCMD(["loglevel", str(10)])
 
-    def flash(self):
-        self.fl_state.set("Processing...")
-        filename = askopenfilename(
-            filetypes=(("Flash", "*.bin"), ("All files", "*.*"))
-        )
-        if filename == "":
-            return
-        if len(self.table.selection()) == 0:
-            _mac = "all"
-        else:
-            _mac = self.table.item(self.table.selection()[0], option="values")[4]
-        result = ProcessCMD(
-            ["flash", _mac, self.passw.get(), filename, self.fl_state.set]
-        )
-        if (
-            hasattr(result, "keys")
-            and "Ret" in result.keys()
-            and result["Ret"] in CODES.keys()
-        ):
-            showerror("Error", CODES[result["Ret"]])
 
-
-searchers = {
-    #"wans": SearchWans,
-    "xm": SearchXM,
-    #"dahua": SearchDahua,
-    #"fros": SearchFros,
-    #"beward": SearchBeward,
-}
-configure = {
-    #"wans": ConfigWans,
-    "xm": ConfigXM,
-    #"fros": ConfigFros,
-}  # ,"dahua":ConfigDahua
-#flashers = {"xm": FlashXM}  # ,"dahua":FlashDahua,"fros":FlashFros
-logLevel = 30
 if __name__ == "__main__":
+
+
+    logLevel = 20	
+    searchers = {"xm": SearchXM}
+    configure = {"xm": ConfigXM}
+
+    # check if there's a DISPLAY, and use commandline mode if not
+    if os.getenv('DISPLAY', default=None) is None:
+        GUI_TK = False
+
+    # list of preferred interfaces - camera is supposed to be connected to a wired interface
+    intfs = ['eth', 'eno', 'wlx', 'enx']
+    icon = "R0lGODlhIAAgAPcAAAAAAAkFAgwKBwQBABQNBRAQDQQFERAOFA4QFBcWFSAaFCYgGAoUMhwiMSUlJCsrKyooJy8wLjUxLjkzKTY1Mzw7OzY3OEpFPwsaSRsuTRUsWD4+QCo8XQAOch0nYB05biItaj9ARjdHYiRMfEREQ0hIR0xMTEdKSVNOQ0xQT0NEUVFNUkhRXlVVVFdYWFxdXFtZVV9wXGZjXUtbb19fYFRda19gYFZhbF5wfWRkZGVna2xsa2hmaHFtamV0Ynp2aHNzc3x8fHh3coF9dYJ+eH2Fe3K1YoGBfgIgigwrmypajDtXhw9FpxFFpSdVpzlqvFNzj0FvnV9zkENnpUh8sgdcxh1Q2jt3zThi0SJy0Dl81Rhu/g50/xp9/x90/zB35TJv8DJ+/EZqzj2DvlGDrlqEuHqLpHeQp26SuhqN+yiC6imH/zSM/yqa/zeV/zik/1aIwlmP0mmayWSY122h3VWb6kyL/1yP8UGU/UiW/VWd/miW+Eqp/12k/1Co/1yq/2Gs/2qr/WKh/nGv/3er9mK3/3K0/3e4+4ODg4uLi4mHiY+Qj5WTjo+PkJSUlJycnKGem6ShnY2ZrKOjo6urrKqqpLi0prS0tLu8vMO+tb+/wJrE+bzf/sTExMfIx8zMzMjIxtrWyM/Q0NXU1NfY193d3djY1uDf4Mnj+931/OTk5Ozs7O/v8PLy8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAAAALAAAAAAgACAAAAj+AAEIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mgx4iVMnTyJInVKlclSpD550nRpUqKGmD59EjWqlMlVOFWdIgWq0iNNoBIhSujokidPn0aNKrmqVStWqjxRumTqyI5KOxI5OpiIkiakNG2yelqK5alKLSAJgbBBB6RIjArmCKLIkV1HjyZNpTTJFKgSQoI4cGBiBxBIR6QM6TGQxooWL3LwMBwkSJEcLUq8YATDAZAdMkKh+GGpAo0cL1wInJuokSNIeqdeCgLBAoVMR2CEMkHDzAcnTCzsCAKERwsXK3wYKYLIdd6pjh4guCGJw5IpT7R8CeNlCwsikx7+JTJ+PAZlRHXxOgqBAQMTLXj0AAKkJw+eJw6CXGqJyAWNyT8QgZ5rsD2igwYEOOEGH38EEoghgcQhQgJAxISJI/8ZNoQUijiX1yM7NIBAFm3wUcghh9yBhQcCFEBDJ6V8MskKhgERxBGMMILXI7AhsoAAGSgRBRlliLHHHlZgMAAJmLByCiUnfGajFEcgotVzjkhggAYjjBHFFISgkoodSDAwAyStqDIJAELs4CYQQxChVSRTQcJCFWmUyAcghmzCCRgdXCEHEU69VJiNdDmnV0s4rNHFGmzgkUcfhgiShAd0nNHDVAc9YIEFFWxAQgkVpKAGF1yw4UYdc6AhhQohJFiwQAIRPQCHFlRAccMJFCRAgAAVJXDBBAsQEEBHDwUEADs="
+    help = """
+        Usage: %s [-q] [-n] [Command];[Command];...
+        -q				No output
+        -n				No gui
+        Command			Description
+
+        help			This help
+        echo			Just echo
+        log [filename]		Set log file
+        logLevel [0..100]	Set log verbosity
+        search [brand]		Searching devices of [brand] or all
+        table			Table of devices
+        json			JSON String of devices
+        device [MAC]		JSON String of [MAC]
+        config [MAC] [IP] [MASK] [GATE] [Pasword]   - Configure searched divice
+        """ % os.path.basename(
+        sys.argv[0]
+    )
+    lang, charset = getlocale()
+
     if len(sys.argv) > 1:
-        argvs = (sys.argv[1:]).copy()
-        if '-i' in argvs:
-            ifac = argvs[argvs.index('-i')+1]
-            print(f'new interface {ifac}')
-            intfs.append(ifac)
-            argvs.remove(ifac)
-            argvs.remove('-i')
-        cmds = " ".join(argvs)
+        cmds = " ".join(sys.argv[1:])
         if cmds.find("-q ") != -1:
             cmds = cmds.replace("-q ", "").replace("-n ", "").strip()
             logLevel = 0
         for cmd in cmds.split(";"):
             ProcessCMD(cmd.split(" "))
+    if '-n' in sys.argv:
+        GUI_TK = False
+        
     if GUI_TK and "-n" not in sys.argv:
-        root = Tk.Tk()
+        root = Tk()
         app = GUITk(root)
         if (
             "--theme" in sys.argv
         ):  # ('winnative', 'clam', 'alt', 'default', 'classic', 'vista', 'xpnative')
-            style = Tk.Style()
+            style = Style()
             theme = [sys.argv.index("--theme") + 1]
             if theme in style.theme_names():
                 style.theme_use(theme)
         root.mainloop()
         sys.exit(1)
+
+    # cmdline only, uses first interface with an IP address
     print("Type help or ? to display help(q or quit to exit)")
     while True:
         data = input("> ").split(";")
@@ -812,5 +817,3 @@ if __name__ == "__main__":
                 print(CODES[result["Ret"]])
             else:
                 print(result)
-    sys.exit(1)
-    
