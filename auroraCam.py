@@ -237,7 +237,7 @@ def purgeLogs(thiscfg):
     logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
     days_to_keep = 30
     date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
-    date_to_purge_to = date_to_purge_to.timestamp(date_to_purge_to)
+    date_to_purge_to = date_to_purge_to.timestamp()
     log.info(f'purging logs older than {days_to_keep}')
     # Only going to purge RMS log files
     flist = glob.glob1(logdir, '*.log*')
@@ -514,22 +514,21 @@ def adjustColour(fnam, red=1, green=1, blue=1, fnamnew=None):
 def grabImage(ipaddress, fnam, hostname, now, thiscfg):
     capstr = f'rtsp://{ipaddress}:554/user=admin&password=&channel=1&stream=0.sdp'
     # log.info(capstr)
-    try:
-        cap = cv2.VideoCapture(capstr)
-    except Exception as e:
-        log.warning('unable to connect to camera')
-        log.warning(e, exc_info=True)
-        return 
     ret = False
+    cap = None
     retries = 0
     while not ret and retries < 10:
         try:
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "timeout;5000"
+            cap = cv2.VideoCapture(capstr, cv2.CAP_FFMPEG)
             ret, frame = cap.read()
+            cap.release()
         except Exception as e:
             log.warning('unable to read frame')
             log.warning(e, exc_info=True)
         retries += 1
-    cap.release()
+    if cap:
+        cap.release()
     if not ret:
         log.warning('unable to grab frame')
         return 
@@ -650,7 +649,6 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
 
 
 if __name__ == '__main__':
-    ipaddress = sys.argv[1]
     hostname = platform.uname().node
 
     thiscfg = configparser.ConfigParser()
@@ -696,6 +694,7 @@ if __name__ == '__main__':
         log.info('not sending to youtube')
 
     nightgain = int(thiscfg['auroracam']['nightgain'])
+    ipaddress = thiscfg['auroracam']['ipaddress']
     camid = thiscfg['auroracam']['camid']
     if os.path.isfile(norebootflag):
         os.remove(norebootflag)
