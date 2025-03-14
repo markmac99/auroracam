@@ -1,4 +1,5 @@
 opencv-python
+bcrypt<4
 boto3
 python-crontab
 ephem

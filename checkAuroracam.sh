@@ -1,9 +1,9 @@
 #!/bin/bash
 # Copyright (C) Mark McIntyre
 #
-source ~/source/auroracam/config.ini > /dev/null 2>&1
-filetocheck=$DATADIR/../live.jpg
 here="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+source $here/config.ini > /dev/null 2>&1
+filetocheck=$DATADIR/../live.jpg
 source ~/vAuroracam/bin/activate
 
 while true
@@ -14,17 +14,8 @@ do
             logger -s -t checkAuroracam "file late: checking camera address is right"
             ping -c 1  -w 1 $IPADDRESS > /dev/null 2>&1
             if [ $? -eq 1 ] ; then 
-                logger -s -t checkAuroracam "no response, looking on default address"
-                ping -c 1  -w 1 192.168.1.10 > /dev/null 2>&1
-                if [ $? -eq 0 ] ; then 
-                    logger -s -t checkAuroracam "trying to force address change"
-                    pushd $here
-                    python -c "from setExpo import setCameraNetWorkDets;setCameraNetWorkDets('192.168.1.10','$IPADDRESS')"
-                     logger -s -t $(ping -c 1 $IPADDRESS| tail -2 | head -1)
-                    logger -s -t checkAuroracam "address changed"
-                else
-                    logger -s -t checkAuroracam "camera seems dead"
-                fi
+                logger -s -t checkAuroracam "no response, trying to reset IP address"
+                python $here/camManager.py "search;config $MACADDRESS $IPADDRESS 255.255.255.0 192.168.1.1;quit"
             else
                 logger -s -t checkAuroracam "camera ok, likely software failure, restarting"
                 systemctl --user restart auroracam
