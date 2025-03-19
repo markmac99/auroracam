@@ -42,7 +42,6 @@ bash ./install.sh
 
 ### Now edit `config.ini` and fill in following
   * IPADDRESS - the IP address of your camera
-  * CAMID - a camera ID which will be used as part of the filenames. 
   * LAT, LON, ALT - your latitude & longitude in degrees (+ for East) and elevation above sealevel in metres. 
   * other values can be left at their defauults. 
   

@@ -29,23 +29,18 @@ pausetime = 2 # time to wait between capturing frames
 log = logging.getLogger("logger")
 
 
-def getFilesToUpload(thiscfg, uid=None):
+def getFilesToUpload(thiscfg, s3, bucket, s3prefix):
     """
     Load the current list of folders/files to be archived 
 
     Parameters
         thiscfg  [object] config 
     """
-    if uid is None:
-        uid = platform.uname()[1]
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
-    if thiscfg['uploads']['s3uploadloc'] != '':
+    if s3 is not None:
         log.info('getting list of files to upload from S3')
-        s3 = getAWSConn(thiscfg, uid, uid)
-        bucket = thiscfg['uploads']['s3uploadloc'][5:]
-        camid = thiscfg['auroracam']['camid']
         try:
-            s3.meta.client.download_file(bucket, f'{camid}/FILES_TO_UPLOAD.inf', os.path.join(datadir,'FILES_TO_UPLOAD.inf'))
+            s3.meta.client.download_file(bucket, f'{s3prefix}/FILES_TO_UPLOAD.inf', os.path.join(datadir,'FILES_TO_UPLOAD.inf'))
         except Exception:
             log.info('no files-to-keep list in S3')
     elif thiscfg['archive']['archserver'] != '':
@@ -70,24 +65,19 @@ def getFilesToUpload(thiscfg, uid=None):
     return dirnames
 
 
-def pushFilesToUpload(thiscfg):
+def pushFilesToUpload(thiscfg, s3, bucket, s3prefix):
     """
     Upload current list of folders/files to be archived back to AWS
 
     Parameters
         thiscfg [object] the config object
     """
-    uid = platform.uname()[1]
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
     locfnam = os.path.join(datadir, 'FILES_TO_UPLOAD.inf')
     open(locfnam, 'w').write('') # empty the file, we've processed it
-    if thiscfg['uploads']['s3uploadloc'] != '':
-        log.info('pushing FILES_TO_UPLOAD back to S3')
-        s3 = getAWSConn(thiscfg, uid, uid)
-        bucket = thiscfg['uploads']['s3uploadloc'][5:]
-        camid = thiscfg['auroracam']['camid']
+    if s3 is not None:
         try:
-            s3.meta.client.upload_file(locfnam, bucket, f'{camid}/FILES_TO_UPLOAD.inf')
+            s3.meta.client.upload_file(locfnam, bucket, f'{s3prefix}/FILES_TO_UPLOAD.inf')
         except Exception:
             log.warning('unable to update files-to-upload')
     elif thiscfg['archive']['archserver'] != '':
@@ -257,7 +247,7 @@ def purgeLogs(thiscfg):
     return 
 
 
-def freeSpaceAndArchive(thiscfg):
+def freeSpaceAndArchive(thiscfg, s3, bucket, s3prefix):
     """
     Free up space by compressing and deleting older data. 
 
@@ -283,7 +273,7 @@ def freeSpaceAndArchive(thiscfg):
     log.info(f'Available {freekb} need {reqkb}')
 
     log.info('checking for data to save')
-    dirstoupload = getFilesToUpload(thiscfg)
+    dirstoupload = getFilesToUpload(thiscfg, s3, bucket, s3prefix)
 
     log.info('checking for deletable data')
     deletable = getDeletableFiles(thiscfg, dirstoupload)
@@ -298,7 +288,7 @@ def freeSpaceAndArchive(thiscfg):
     log.info('space freed up, now archiving if needed')
     for dir in dirstoupload:
         compressAndUpload(thiscfg, dir)
-    pushFilesToUpload(thiscfg)
+    pushFilesToUpload(thiscfg, s3, bucket, s3prefix)
 
     log.info('rechecking for deletable data')
     deletable = getDeletableFiles(thiscfg, dirstoupload)
@@ -481,6 +471,23 @@ def getAWSConn(thiscfg, remotekeyname, uid):
     return s3
 
 
+def s3details(thiscfg, hostname):
+    tmpbucket = thiscfg['uploads']['s3uploadloc']
+    if tmpbucket == '':
+        return None, None, None
+    s3 = getAWSConn(thiscfg, hostname, hostname)
+    if tmpbucket[:5]=='s3://':
+        tmpbucket =tmpbucket[5:]
+    bucket = tmpbucket.replace('/', ' ', 1).split(' ')[0]
+    if '/' in tmpbucket:
+        s3prefix = tmpbucket.replace('/', ' ', 1).split(' ')[1]
+    else:
+        if 'camid' in thiscfg['auroracam']:
+            s3prefix = thiscfg['auroracam']['camid']
+        s3prefix = platform.uname().node
+    return s3, bucket, s3prefix
+
+
 def getStartEndTimes(currdt, thiscfg, origdusk=None):
     lat = thiscfg['auroracam']['lat']
     lon = thiscfg['auroracam']['lon']
@@ -519,7 +526,7 @@ def grabImage(ipaddress, fnam, hostname, now, thiscfg):
     except Exception as e:
         log.warning('unable to connect to camera')
         log.warning(e, exc_info=True)
-        return 
+        return False
     ret = False
     retries = 0
     while not ret and retries < 10:
@@ -532,7 +539,7 @@ def grabImage(ipaddress, fnam, hostname, now, thiscfg):
     cap.release()
     if not ret:
         log.warning('unable to grab frame')
-        return 
+        return False
     ret = False
     retries = 0
     while not ret and retries < 10:
@@ -552,12 +559,14 @@ def grabImage(ipaddress, fnam, hostname, now, thiscfg):
         if radj < 0.99 or gadj < 0.99 or badj < 0.99:
             adjustColour(fnam, red=radj, green=gadj, blue=badj)
         annotateImageArbitrary(fnam, title, color='#FFFFFF')
+        return True
     else:
         log.warning('no new image so not annotated')
-    return 
+        return False
 
 
-def makeTimelapse(dirname, s3, camname, bucket, daytimelapse=False, maketimelapse=True, youtube=True):
+def makeTimelapse(dirname, s3, bucket, s3prefix, daytimelapse=False, maketimelapse=True, youtube=True):
+    hostname = platform.uname().node
     dirname = os.path.normpath(os.path.expanduser(dirname))
     _, mp4shortname = os.path.split(dirname)[:15]
     if daytimelapse:
@@ -582,9 +591,9 @@ def makeTimelapse(dirname, s3, camname, bucket, daytimelapse=False, maketimelaps
             log.warning(f'problem creating {mp4name}')
     if s3 is not None:
         if daytimelapse:
-            targkey = f'{camname}/{mp4shortname[:6]}/{camname}_{mp4shortname}_day.mp4'
+            targkey = f'{s3prefix}/{mp4shortname[:6]}/{hostname}_{mp4shortname}_day.mp4'
         else:
-            targkey = f'{camname}/{mp4shortname[:6]}/{camname}_{mp4shortname}.mp4'
+            targkey = f'{s3prefix}/{mp4shortname[:6]}/{hostname}_{mp4shortname}.mp4'
         try:
             log.info(f'uploading to {bucket}/{targkey}')
             s3.meta.client.upload_file(mp4name, bucket, targkey, ExtraArgs = {'ContentType': 'video/mp4'})
@@ -650,7 +659,6 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
 
 
 if __name__ == '__main__':
-    ipaddress = sys.argv[1]
     hostname = platform.uname().node
 
     thiscfg = configparser.ConfigParser()
@@ -662,21 +670,11 @@ if __name__ == '__main__':
     os.makedirs(datadir, exist_ok=True)
     norebootflag = os.path.join(datadir, '..', '.noreboot')
     open(norebootflag, 'w')
-    freeSpaceAndArchive(thiscfg)
-    s3 = None
-    bucket = None
-    ftpserver = None
-    userid = None
-    sshkey = None
-    s3loc = thiscfg['uploads']['s3uploadloc']
-    if s3loc != '':
-        log.info(f'S3 upload target {s3loc}')
-        # try to retrieve an AWS key from the sftp server
-        s3 = getAWSConn(thiscfg, hostname, hostname)
-        bucket = s3loc[5:]
-    else:
-        s3loc = None
-        #log.info('not uploading to S3')
+    s3, bucket, s3prefix = s3details(thiscfg, hostname)
+    if s3 is not None:
+        log.info(f'S3 upload target {bucket}/{s3prefix}')
+
+    freeSpaceAndArchive(thiscfg, s3, bucket, s3prefix)
 
     ftpserver = thiscfg['uploads']['ftpserver']
     if ftpserver != '':
@@ -685,18 +683,21 @@ if __name__ == '__main__':
         sshkey = thiscfg['uploads']['ftpkey']
         ftploc = thiscfg['uploads']['ftpuploadloc']
     else:
+        log.info('not uploading to ftpserver')
         ftpserver = None
-        #log.info('not uploading to ftpserver')
+        userid = None
+        sshkey = None
+        ftploc = None
 
-    yt = False
-    try: 
-        if int(thiscfg['youtube']['doupload']) == 1:
-            yt = True
-    except Exception:
-        log.info('not sending to youtube')
+    yt = thiscfg['youtube']['doupload']
+    if yt=='1' or yt.lower()=='true':
+        yt=True
+    else:
+        yt=False
 
+    ipaddress = thiscfg['auroracam']['ipaddress']
+    macaddress = thiscfg['auroracam']['macaddress']
     nightgain = int(thiscfg['auroracam']['nightgain'])
-    camid = thiscfg['auroracam']['camid']
     if os.path.isfile(norebootflag):
         os.remove(norebootflag)
     
@@ -713,12 +714,8 @@ if __name__ == '__main__':
 
     log.info(f'now {now}, dusk {dusk}, dawn {dawn} last dawn {lastdawn}')
     uploadcounter = 0
+    currtime = datetime.datetime.now()
     while True:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        fnam = os.path.expanduser(os.path.join(datadir, '..', 'live.jpg'))
-        thiscfg.read(os.path.join(local_path, 'config.ini'))
-        grabImage(ipaddress, fnam, hostname, now, thiscfg)
-        log.info(f'grabbed {fnam}')
         lastdusk = dusk
         dusk, dawn, lastdawn = getStartEndTimes(now, thiscfg, lastdusk)
         if isnight:
@@ -730,18 +727,35 @@ if __name__ == '__main__':
             # its dawn
             capdirname = os.path.join(datadir, lastdusk.strftime('%Y%m%d_%H%M%S'))
 
+        #log.info(f'capturing to {capdirname}')
+        now = datetime.datetime.now(datetime.timezone.utc)
+        fnam = os.path.expanduser(os.path.join(datadir, '..', 'live.jpg'))
+        thiscfg.read(os.path.join(local_path, 'config.ini'))
+        gotaframe = grabImage(ipaddress, fnam, hostname, now, thiscfg)
+        if not gotaframe:
+            log.warning('failed to grab frame')
+        else:
+            newtime = datetime.datetime.now()
+            framegap = (newtime - currtime).seconds
+            currtime = newtime
+            os.makedirs(capdirname, exist_ok=True)
+            open(os.path.join(capdirname,'frameintervals.txt'),'a+').write(f"{currtime.strftime('%Y%m%d-%H%M%S')},{framegap}\n")
+            log.info(f'grabbed {fnam}')
+
         # due to slight variations in the results from ephem, the time of dawn and dusk may drift by a second or two
         # this caters for it be reusing any existing folder thats timestamped within 10s
         capdirbase = os.path.split(capdirname)[1]
+        # FIXME
         existingfolder = glob.glob(os.path.join('/home/mark/data/auroracam', capdirbase[:-2]+'*'))
         if len(existingfolder) > 0:
             capdirname = existingfolder[0]
 
-        if daytimelapse or isnight: 
+        if gotaframe and (daytimelapse or isnight): 
             os.makedirs(capdirname, exist_ok=True)
             fnam2 = os.path.join(capdirname, now.strftime('%Y%m%d_%H%M%S') + '.jpg')
             shutil.copyfile(fnam, fnam2)
             createLatestIndex(capdirname)
+            uploadcounter += pausetime
             log.info(f'and copied to {capdirname}')
         # when we move from day to night, make the day timelapse then switch exposure and flag
         if now < dawn and now > dusk and isnight is False:
@@ -749,7 +763,7 @@ if __name__ == '__main__':
                 # make the daytime mp4
                 norebootflag = os.path.join(datadir, '..', '.noreboot')
                 open(norebootflag, 'w')
-                makeTimelapse(capdirname, s3, camid, bucket, daytimelapse=True, youtube=yt)
+                makeTimelapse(capdirname, s3, bucket, s3prefix, daytimelapse=True, youtube=yt)
                 createLatestIndex(capdirname)
                 os.remove(norebootflag)
             isnight = True
@@ -761,7 +775,7 @@ if __name__ == '__main__':
         if dusk != lastdusk and isnight:
             norebootflag = os.path.join(datadir, '..', '.noreboot')
             open(norebootflag, 'w')
-            makeTimelapse(capdirname, s3, camid, bucket, youtube=yt)
+            makeTimelapse(capdirname, s3, bucket, s3prefix, youtube=yt)
             createLatestIndex(capdirname)
             log.info('switched to daytime mode, now rebooting')
             setCameraExposure(ipaddress, 'DAY', nightgain, True, True)
@@ -772,18 +786,18 @@ if __name__ == '__main__':
                 log.info('unable to reboot')
                 log.info(e, exc_info=True)
 
-        uploadcounter += pausetime
         testmode = int(os.getenv('TESTMODE', default=0))
         log.info(f'fnam is {fnam}, uploadcounter {uploadcounter}')
         if uploadcounter > 9 and testmode == 0 and os.path.isfile(fnam):
             #log.info('uploading image')
             if s3 is not None:
                 try:
-                    s3.meta.client.upload_file(fnam, bucket, f'{hostname}/live.jpg', ExtraArgs = {'ContentType': 'image/jpeg'})
-                    log.info(f'uploaded live image to {bucket}')
+                    s3, bucket, s3prefix = s3details(thiscfg, hostname)
+                    s3.meta.client.upload_file(fnam, bucket, f'{s3prefix}/live.jpg', ExtraArgs = {'ContentType': 'image/jpeg'})
+                    log.info(f'uploaded live image to {bucket}/{s3prefix}')
                     uploadcounter = 0
                 except Exception as e:
-                    log.warning(f'upload to {bucket} failed')
+                    log.warning(f'upload to {bucket}/{s3prefix} failed')
                     log.info(e, exc_info=True)
             else:
                 #log.info('s3 not configured')

@@ -1,4 +1,4 @@
-from auroraCam import makeTimelapse, getAWSConn, setupLogging
+from auroraCam import makeTimelapse, setupLogging, s3details
 import platform
 import os
 import sys
@@ -7,6 +7,9 @@ import logging
 
 log = logging.getLogger("logger")
 
+if len(sys.argv) < 2:
+    print('usage: python ./redoTimelapse.py yyyymmdd_hhmmss ')
+    exit(0)
 
 dirpath = sys.argv[1]
 force = False
@@ -17,24 +20,23 @@ if len(sys.argv) > 2:
 thiscfg = configparser.ConfigParser()
 local_path =os.path.dirname(os.path.abspath(__file__))
 thiscfg.read(os.path.join(local_path, 'config.ini'))
-ulloc = thiscfg['uploads']['s3uploadloc']
-camid = thiscfg['auroracam']['camid']
+setupLogging(thiscfg)
+
 datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
 hostname = platform.uname().node
-if int(thiscfg['youtube']['doupload']) == 1:
-    doyoutube = True
-else:
-    doyoutube = False
 
-setupLogging(thiscfg)
-if ulloc[:5] == 's3://':
-    uid = platform.uname()[1]
-    s3 = getAWSConn(thiscfg, uid, uid)
-    bucket = ulloc[5:]
+yt = thiscfg['youtube']['doupload']
+if yt=='1' or yt.lower()=='true':
+    yt=True
 else:
-    print('not uploading to AWS S3')
-    s3 = None
-    bucket = None
+    yt=False
+
+s3, bucket, s3prefix = s3details(thiscfg, hostname)
+if s3 is None:
+    print('NOT uploading to AWS S3')
+else:
+    print('uploading to AWS S3')
+
 dirname = os.path.join(datadir, dirpath)
                           
-makeTimelapse(dirname, s3, camid, bucket, daytimelapse=False, maketimelapse=force, youtube=doyoutube)
+makeTimelapse(dirname, s3, bucket, s3prefix, daytimelapse=False, maketimelapse=force, youtube=yt)
