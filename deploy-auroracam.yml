@@ -1,9 +1,9 @@
 ---
 - hosts: auroracam
   vars_files: 
-    - /mnt/e/dev/apikeys/mqvariables.enc
+    - /mnt/c/Users/{{ lookup('env','USER' )}}/apikeys/mqvariables.enc
   vars:
-    srcdir: /mnt/e/dev/meteorhunting/auroracam
+    srcdir: "/mnt/c/Users/{{ lookup('env','USER' )}}/OneDrive/dev/auroracam"
     destdir: ~/source/auroracam
     macaddress: 00:12:13:63:0b:c6
     ipaddress: 192.168.1.40
