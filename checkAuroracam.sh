@@ -14,7 +14,7 @@ do
             logger -s -t checkAuroracam "file late: checking camera address is right"
             ping -c 1  -w 1 $IPADDRESS > /dev/null 2>&1
             if [ $? -eq 1 ] ; then 
-                logger -s -t checkAuroracam "no response, trying to reset IP address"
+                logger -s -t checkAuroracam "no response from $IPADDRESS, trying to reset"
                 python $here/CamManager.py "search;config $MACADDRESS $IPADDRESS 255.255.255.0 192.168.1.1;quit"
             else
                 logger -s -t checkAuroracam "camera ok, likely software failure, restarting"

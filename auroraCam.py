@@ -227,7 +227,7 @@ def purgeLogs(thiscfg):
     logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
     days_to_keep = 30
     date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
-    date_to_purge_to = date_to_purge_to.timestamp(date_to_purge_to)
+    date_to_purge_to = date_to_purge_to.timestamp()
     log.info(f'purging logs older than {days_to_keep}')
     # Only going to purge RMS log files
     flist = glob.glob1(logdir, '*.log*')
