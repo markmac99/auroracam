@@ -3,7 +3,7 @@
   vars_files: 
     - /mnt/c/Users/{{ lookup('env','USER' )}}/apikeys/mqvariables.enc
   vars:
-    srcdir: "/mnt/c/Users/{{ lookup('env','USER' )}}/OneDrive/dev/auroracam"
+    srcdir: "/mnt/c/Users/{{ lookup('env','USER' )}}/OneDrive/dev/astro/auroracam"
     destdir: ~/source/auroracam
     macaddress: 00:12:13:63:0b:c6
     ipaddress: 192.168.1.40
@@ -95,7 +95,7 @@
     lineinfile: 
       path: '{{destdir}}/mqtt.cfg'
       regexp: 'BROKER='
-      line: 'BROKER=wxsatpi'
+      line: 'BROKER=metsatpi'
   - name: update MQTT username
     lineinfile:
       path: '{{destdir}}/mqtt.cfg'

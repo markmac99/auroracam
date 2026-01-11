@@ -26,6 +26,7 @@ from setExpo import setCameraExposure
 
 
 pausetime = 2 # time to wait between capturing frames 
+UPLOADFREQ = 10 # upload every n'th frame during the day
 log = logging.getLogger("logger")
 
 
@@ -755,8 +756,11 @@ if __name__ == '__main__':
             fnam2 = os.path.join(capdirname, now.strftime('%Y%m%d_%H%M%S') + '.jpg')
             shutil.copyfile(fnam, fnam2)
             createLatestIndex(capdirname)
-            uploadcounter += pausetime
             log.info(f'and copied to {capdirname}')
+            if isnight: # upload every image at night
+                uploadcounter = UPLOADFREQ
+            else:
+                uploadcounter += pausetime
         # when we move from day to night, make the day timelapse then switch exposure and flag
         if now < dawn and now > dusk and isnight is False:
             if daytimelapse:
@@ -788,7 +792,7 @@ if __name__ == '__main__':
 
         testmode = int(os.getenv('TESTMODE', default=0))
         log.info(f'fnam is {fnam}, uploadcounter {uploadcounter}')
-        if uploadcounter > 9 and testmode == 0 and os.path.isfile(fnam):
+        if uploadcounter >= UPLOADFREQ and testmode == 0 and os.path.isfile(fnam):
             #log.info('uploading image')
             if s3 is not None:
                 try:
