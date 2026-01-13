@@ -26,7 +26,7 @@ from setExpo import setCameraExposure
 
 
 pausetime = 2 # time to wait between capturing frames 
-UPLOADFREQ = 10 # upload every n'th frame during the day
+uploadperiod = 30 # how often to upload to S3/ftp
 log = logging.getLogger("logger")
 
 
@@ -714,7 +714,8 @@ if __name__ == '__main__':
         setCameraExposure(ipaddress, 'NIGHT', nightgain, True, True)
 
     log.info(f'now {now}, dusk {dusk}, dawn {dawn} last dawn {lastdawn}')
-    uploadcounter = 0
+    upload_init_time = datetime.datetime.now()
+    log.info(f'uploading every {uploadperiod} seconds')
     currtime = datetime.datetime.now()
     while True:
         lastdusk = dusk
@@ -757,10 +758,6 @@ if __name__ == '__main__':
             shutil.copyfile(fnam, fnam2)
             createLatestIndex(capdirname)
             log.info(f'and copied to {capdirname}')
-            if isnight: # upload every image at night
-                uploadcounter = UPLOADFREQ
-            else:
-                uploadcounter += pausetime
         # when we move from day to night, make the day timelapse then switch exposure and flag
         if now < dawn and now > dusk and isnight is False:
             if daytimelapse:
@@ -789,11 +786,15 @@ if __name__ == '__main__':
             except Exception as e:
                 log.info('unable to reboot')
                 log.info(e, exc_info=True)
-
         testmode = int(os.getenv('TESTMODE', default=0))
-        log.info(f'fnam is {fnam}, uploadcounter {uploadcounter}')
-        if uploadcounter >= UPLOADFREQ and testmode == 0 and os.path.isfile(fnam):
-            #log.info('uploading image')
+        log.info(f'fnam is {fnam}')
+
+        upload_trigger_time = datetime.datetime.now()
+        log.info(f'elapsed {(upload_trigger_time - upload_init_time).seconds}')
+        log.info(f'{upload_init_time}, {upload_trigger_time}')
+        if (upload_trigger_time - upload_init_time).seconds > uploadperiod and testmode == 0 and os.path.isfile(fnam):
+            log.info('uploading image')
+            upload_init_time = upload_trigger_time
             if s3 is not None:
                 try:
                     s3, bucket, s3prefix = s3details(thiscfg, hostname)
