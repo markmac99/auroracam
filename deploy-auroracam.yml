@@ -73,17 +73,12 @@
     lineinfile: 
       path: '{{destdir}}/config.ini'
       regexp: 'S3UPLOADLOC='
-      line: 'S3UPLOADLOC=s3://mjmm-data/UK9999'
-  - name: update idserver
-    lineinfile: 
-      path: '{{destdir}}/config.ini'
-      regexp: 'IDSERVER='
-      line: 'IDSERVER=wordpresssite'
-  - name: update idserver key
+      line: 'S3UPLOADLOC=s3://mjmm-data'
+  - name: update AWS key
     lineinfile: 
       path: '{{destdir}}/config.ini'
       regexp: 'IDKEY='
-      line: 'IDKEY=~/.ssh/auroracam'
+      line: 'IDKEY=~/.ssh/auroracam.key'
   # youtube settings 
   - name: update youtube setting
     lineinfile: 
