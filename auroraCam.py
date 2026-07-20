@@ -485,7 +485,8 @@ def s3details(thiscfg, hostname):
     else:
         if 'camid' in thiscfg['auroracam']:
             s3prefix = thiscfg['auroracam']['camid']
-        s3prefix = platform.uname().node
+        else:
+            s3prefix = platform.uname().node
     return s3, bucket, s3prefix
 
 
@@ -579,6 +580,15 @@ def makeTimelapse(dirname, s3, bucket, s3prefix, daytimelapse=False, maketimelap
     if maketimelapse:
         if os.path.isfile(mp4name):
             os.remove(mp4name)
+        # delete any zero-size files - these can arise if capture failed
+        jpglist = glob.glob(f'{dirname}/*.jpg')
+        for jpg in jpglist:
+            try:
+                if os.path.getsize(jpg) == 0:
+                    os.remove(jpg)
+            except Exception:
+                log.warning('unable to remove zero-size image')        
+                
         cmdline = f'ffmpeg -v quiet -r {fps} -pattern_type glob -i "{dirname}/*.jpg" \
             -vcodec libx264 -pix_fmt yuv420p -crf 25 -movflags faststart -g 15 -vf "hqdn3d=4:3:6:4.5,lutyuv=y=gammaval(0.77)"  \
             {mp4name}'
