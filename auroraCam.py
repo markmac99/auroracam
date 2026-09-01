@@ -123,7 +123,6 @@ def getDeletableFiles(thiscfg, filestokeep=[]):
 
     Parameters:
         datadir     [string] - the root folder containing the data files eg ~/RMS_data/auroracam
-        daystokeep  [int]    - number of recent days to keep and consider not deletable
         filestokeep [string] - a list of files or folders we want to archive before deleting
     """
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
@@ -226,12 +225,12 @@ def compressAndUpload(thiscfg, thisdir):
 
 def purgeLogs(thiscfg):
     logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
-    days_to_keep = 30
+    days_to_keep = int(thiscfg['auroracam']['logdaystokeep'])
     date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
     date_to_purge_to = date_to_purge_to.timestamp()
-    log.info(f'purging logs older than {days_to_keep}')
-    # Only going to purge RMS log files
-    flist = glob.glob1(logdir, '*.log*')
+    log.info(f'purging logs older than {days_to_keep} days')
+    # Only going to purge auroracam log files
+    flist = glob.glob1(logdir, 'auroracam*.log*')
     for fl in flist:
         log_file_path = os.path.join(logdir, fl)
         # Check if the file exists and check if it should be purged
@@ -675,6 +674,9 @@ if __name__ == '__main__':
     thiscfg = configparser.ConfigParser()
     local_path =os.path.dirname(os.path.abspath(__file__))
     thiscfg.read(os.path.join(local_path, 'config.ini'))
+    # hardcoded for now
+    thiscfg['auroracam']['logdaystokeep']='30'
+
     setupLogging(thiscfg)
 
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
