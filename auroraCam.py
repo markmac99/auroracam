@@ -12,8 +12,9 @@ import configparser
 import boto3 
 import logging 
 import glob
+import ssl
 import logging.handlers
-import paho.mqtt.client as mqtt
+from paho.mqtt.publish import multiple
 import platform 
 import paramiko
 import tempfile
@@ -23,10 +24,11 @@ import ephem
 
 from makeImageIndex import createLatestIndex
 from setExpo import setCameraExposure
+from CamManager import camManager
 
+MAXRETRIES = 5
 
 pausetime = 2 # time to wait between capturing frames 
-uploadperiod = 30 # how often to upload to S3/ftp
 log = logging.getLogger("logger")
 
 
@@ -39,13 +41,13 @@ def getFilesToUpload(thiscfg, s3, bucket, s3prefix):
     """
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
     if s3 is not None:
-        log.info('getting list of files to upload from S3')
+        log.debug('getting list of files to upload from S3')
         try:
             s3.meta.client.download_file(bucket, f'{s3prefix}/FILES_TO_UPLOAD.inf', os.path.join(datadir,'FILES_TO_UPLOAD.inf'))
         except Exception:
             log.info('no files-to-keep list in S3')
     elif thiscfg['archive']['archserver'] != '':
-        log.info('getting list of files to upload from archive server')
+        log.debug('getting list of files to upload from archive server')
         archuser = thiscfg['archive']['archuser']
         archfldr = thiscfg['archive']['archfldr']
         ssh_client = paramiko.SSHClient()
@@ -226,7 +228,7 @@ def compressAndUpload(thiscfg, thisdir):
 def purgeLogs(thiscfg):
     logdir = os.path.expanduser(thiscfg['auroracam']['logdir'])
     days_to_keep = int(thiscfg['auroracam']['logdaystokeep'])
-    date_to_purge_to = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
+    date_to_purge_to = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days_to_keep)
     date_to_purge_to = date_to_purge_to.timestamp()
     log.info(f'purging logs older than {days_to_keep} days')
     # Only going to purge auroracam log files
@@ -361,43 +363,28 @@ def getNextRiseSet(lati, longi, elev, fordate=None):
     return rise.replace(tzinfo=datetime.timezone.utc), set.replace(tzinfo=datetime.timezone.utc)
 
 
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        print("Connected success")
-    else:
-        print("Connected fail with code", rc)
-
-
-def on_publish(client, userdata, result):
-    #print('data published - {}'.format(result))
-    return
-
-
-def sendToMQTT(broker=None):
-    if broker is None:
-        srcdir = os.path.split(os.path.abspath(__file__))[0]
-        localcfg = configparser.ConfigParser()
-        localcfg.read(os.path.join(srcdir, 'mqtt.cfg'))
+def sendToMQTT(localcfg):
     broker = localcfg['mqtt']['broker']
+    if not broker:
+        return
     hname = platform.uname().node
-    client = mqtt.Client(hname)
-    client.on_connect = on_connect
-    client.on_publish = on_publish
-    if localcfg['mqtt']['username'] != '':
-        client.username_pw_set(localcfg['mqtt']['username'], localcfg['mqtt']['password'])
-    if localcfg['mqtt']['username'] != '':
-        client.username_pw_set(localcfg['mqtt']['username'], localcfg['mqtt']['password'])
-    client.connect(broker, 1883, 60)
+    mqport = int(localcfg['mqtt']['port'])
+    auth = {'username': localcfg['mqtt']['username'], 'password': localcfg['mqtt']['password']}
+    if mqport == 8883:
+        tls = {'ca_certs':None, 'cert_reqs':ssl.CERT_REQUIRED, 'tls_version':ssl.PROTOCOL_TLS}
+    else:
+        tls = None
     usage = shutil.disk_usage('.')
     diskspace = round(usage.used/usage.total*100.0, 2)
     topicroot = localcfg['mqtt']['topic']
-    topic = f'{topicroot}/{hname}/diskspace'
-    ret = client.publish(topic, payload=diskspace, qos=0, retain=False)
-    time.sleep(10)
-    cpuf = '/sys/class/thermal/thermal_zone0/temp'
-    cputemp = int(open(cpuf).readline().strip())/1000
-    topic = f'{topicroot}/{hname}/cputemp'
-    ret = client.publish(topic, payload=cputemp, qos=0, retain=False)
+    if sys.platform != 'win32':
+        cputemp = round(float(open('/sys/class/thermal/thermal_zone0/temp', 'r').readline().strip())/1000,1)
+    else:
+        log.info('cputemp not supported on windows')
+        cputemp=0
+    msgs = [(f'{topicroot}/{hname}/cputemp', cputemp, 1),
+            (f'{topicroot}/{hname}/diskspace', diskspace,1)]
+    ret = multiple(msgs=msgs, hostname=broker, port=mqport, client_id=hname, keepalive=60, auth=auth, tls=tls)
     return ret
 
 
@@ -416,7 +403,7 @@ def getAWSConn(thiscfg, remotekeyname, uid):
     servername = thiscfg['uploads']['idserver']
     if servername == '':
         # look for a local key file
-        log.info('looking for local AWS key')
+        #log.info('looking for local AWS key')
         awskeyfile = thiscfg['uploads']['idkey']
         try:
             lis = open(os.path.expanduser(awskeyfile), 'r').readlines()
@@ -427,7 +414,7 @@ def getAWSConn(thiscfg, remotekeyname, uid):
             key = None
     else:
         # retrieve a keyfile from the server
-        log.info('retrieving AWS key')
+        #log.info('retrieving AWS key')
         sshkeyfile = thiscfg['uploads']['idkey']
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -457,7 +444,7 @@ def getAWSConn(thiscfg, remotekeyname, uid):
         ssh_client.close()
     s3 = None
     if key:
-        log.info('retrieved key details')
+        #log.info('retrieved key details')
         try:
             conn = boto3.Session(aws_access_key_id=key.strip(), aws_secret_access_key=sec.strip())
             s3 = conn.resource('s3')
@@ -521,16 +508,24 @@ def adjustColour(fnam, red=1, green=1, blue=1, fnamnew=None):
 
 def grabImage(ipaddress, fnam, hostname, now, thiscfg):
     capstr = f'rtsp://{ipaddress}:554/user=admin&password=&channel=1&stream=0.sdp'
+    macaddress = thiscfg['auroracam']['macaddress']
+    routeraddress = thiscfg['auroracam']['routeraddress']
+
     # log.info(capstr)
-    try:
-        cap = cv2.VideoCapture(capstr)
-    except Exception as e:
-        log.warning('unable to connect to camera')
-        log.warning(e, exc_info=True)
-        return False
+    for retries in range (MAXRETRIES):
+        try:
+            cap = cv2.VideoCapture(capstr)
+            break
+        except Exception as e:
+            log.warning('unable to connect to camera, trying to reset')
+            time.sleep(1)
+            camManager(['',f'search;config {macaddress} {ipaddress} 255.255.255.0 {routeraddress};quit'])
+            if retries == MAXRETRIES-1:
+                log.warning(e, exc_info=True)
+                return False
     ret = False
     retries = 0
-    while not ret and retries < 10:
+    while not ret and retries < MAXRETRIES:
         try:
             ret, frame = cap.read()
         except Exception as e:
@@ -543,7 +538,7 @@ def grabImage(ipaddress, fnam, hostname, now, thiscfg):
         return False
     ret = False
     retries = 0
-    while not ret and retries < 10:
+    while not ret and retries < MAXRETRIES:
         try:
             ret = cv2.imwrite(fnam, frame)
         except Exception as e:
@@ -605,7 +600,7 @@ def makeTimelapse(dirname, s3, bucket, s3prefix, daytimelapse=False, maketimelap
         else:
             targkey = f'{s3prefix}/{mp4shortname[:6]}/{hostname}_{mp4shortname}.mp4'
         try:
-            log.info(f'uploading to {bucket}/{targkey}')
+            #log.info(f'uploading to {bucket}/{targkey}')
             s3.meta.client.upload_file(mp4name, bucket, targkey, ExtraArgs = {'ContentType': 'video/mp4'})
         except Exception as e:
             log.info('unable to upload mp4')
@@ -634,7 +629,7 @@ def setupLogging(thiscfg, prefix='auroracam_'):
     logfilename = os.path.join(logdir, prefix + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S.%f') + '.log')
     handler = logging.handlers.TimedRotatingFileHandler(logfilename, when='D', interval=1) 
     handler.setLevel(logging.INFO)
-    handler.setLevel(logging.DEBUG)
+    #handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter(fmt='%(asctime)s-%(levelname)s-%(module)s-line:%(lineno)d - %(message)s', 
         datefmt='%Y/%m/%d %H:%M:%S')
     handler.setFormatter(formatter)
@@ -646,7 +641,7 @@ def setupLogging(thiscfg, prefix='auroracam_'):
     ch.setFormatter(formatter)
     log.addHandler(ch)
     log.setLevel(logging.INFO)
-    log.setLevel(logging.DEBUG)
+    #log.setLevel(logging.DEBUG)
     log.info('logging initialised')
     return 
 
@@ -663,7 +658,7 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
         ftp_client.close()
         ssh_client.close()
     except Exception as e:
-        log.warn(f'unable to upload to {ftpserver}:{targloc}')
+        log.warning(f'unable to upload to {ftpserver}:{targloc}')
         log.info(e, exc_info=True)
     return 
 
@@ -678,6 +673,7 @@ if __name__ == '__main__':
     thiscfg['auroracam']['logdaystokeep']='30'
 
     setupLogging(thiscfg)
+    sendToMQTT(thiscfg)
 
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
     os.makedirs(datadir, exist_ok=True)
@@ -713,22 +709,26 @@ if __name__ == '__main__':
     nightgain = int(thiscfg['auroracam']['nightgain'])
     if os.path.isfile(norebootflag):
         os.remove(norebootflag)
-    
+
     # get todays dusk and tomorrows dawn times
     now = datetime.datetime.now(datetime.timezone.utc)
     dusk, dawn, lastdawn = getStartEndTimes(now, thiscfg)
     daytimelapse = int(thiscfg['auroracam']['daytimelapse'])
     if now > dawn or now < dusk:
         isnight = False
-        setCameraExposure(ipaddress, 'DAY', nightgain, True, True)
+        if not setCameraExposure(ipaddress, 'DAY', nightgain, True, True, thiscfg):
+            log.warning('unable to change camera to day mode, will retry')
     else:
         isnight = True
-        setCameraExposure(ipaddress, 'NIGHT', nightgain, True, True)
+        if not setCameraExposure(ipaddress, 'NIGHT', nightgain, True, True, thiscfg):
+            log.warning('unable to change camera to night mode, will retry')
 
     log.info(f'now {now}, dusk {dusk}, dawn {dawn} last dawn {lastdawn}')
-    upload_init_time = datetime.datetime.now()
+    upload_init_time = datetime.datetime.now(datetime.timezone.utc)
+    uploadperiod = int(thiscfg['uploads']['freq'])
     log.info(f'uploading every {uploadperiod} seconds')
-    currtime = datetime.datetime.now()
+    currtime = datetime.datetime.now(datetime.timezone.utc)
+    lastmq_time = currtime
     while True:
         lastdusk = dusk
         dusk, dawn, lastdawn = getStartEndTimes(now, thiscfg, lastdusk)
@@ -749,12 +749,12 @@ if __name__ == '__main__':
         if not gotaframe:
             log.warning('failed to grab frame')
         else:
-            newtime = datetime.datetime.now()
+            newtime = datetime.datetime.now(datetime.timezone.utc)
             framegap = (newtime - currtime).seconds
             currtime = newtime
             os.makedirs(capdirname, exist_ok=True)
             open(os.path.join(capdirname,'frameintervals.txt'),'a+').write(f"{currtime.strftime('%Y%m%d-%H%M%S')},{framegap}\n")
-            log.info(f'grabbed {fnam}')
+            log.debug(f'grabbed {fnam}')
 
         # due to slight variations in the results from ephem, the time of dawn and dusk may drift by a second or two
         # this caters for it be reusing any existing folder thats timestamped within 10s
@@ -769,7 +769,7 @@ if __name__ == '__main__':
             fnam2 = os.path.join(capdirname, now.strftime('%Y%m%d_%H%M%S') + '.jpg')
             shutil.copyfile(fnam, fnam2)
             createLatestIndex(capdirname)
-            log.info(f'and copied to {capdirname}')
+            log.debug(f'and copied to {capdirname}')
         # when we move from day to night, make the day timelapse then switch exposure and flag
         if now < dawn and now > dusk and isnight is False:
             if daytimelapse:
@@ -780,7 +780,9 @@ if __name__ == '__main__':
                 createLatestIndex(capdirname)
                 os.remove(norebootflag)
             isnight = True
-            setCameraExposure(ipaddress, 'NIGHT', nightgain, True, True)
+            if not setCameraExposure(ipaddress, 'NIGHT', nightgain, True, True, thiscfg):
+                log.warning('unable to set night node, will retry')
+                isnight = False
             capdirname = os.path.join(datadir, dusk.strftime('%Y%m%d_%H%M%S'))
             os.makedirs(capdirname, exist_ok=True)
 
@@ -791,7 +793,9 @@ if __name__ == '__main__':
             makeTimelapse(capdirname, s3, bucket, s3prefix, youtube=yt)
             createLatestIndex(capdirname)
             log.info('switched to daytime mode, now rebooting')
-            setCameraExposure(ipaddress, 'DAY', nightgain, True, True)
+            if not setCameraExposure(ipaddress, 'DAY', nightgain, True, True, thiscfg):
+                log.warning('unable to set day node, will retry')
+                isnight = True
             os.remove(norebootflag)
             try:
                 os.system('/usr/bin/sudo /usr/sbin/shutdown -r now')
@@ -799,25 +803,32 @@ if __name__ == '__main__':
                 log.info('unable to reboot')
                 log.info(e, exc_info=True)
         testmode = int(os.getenv('TESTMODE', default=0))
-        log.info(f'fnam is {fnam}')
+        log.debug(f'fnam is {fnam}')
 
-        upload_trigger_time = datetime.datetime.now()
-        log.info(f'elapsed {(upload_trigger_time - upload_init_time).seconds}')
-        log.info(f'{upload_init_time}, {upload_trigger_time}')
+        upload_trigger_time = datetime.datetime.now(datetime.timezone.utc)
+
+        if (upload_trigger_time - lastmq_time).seconds > int(thiscfg['mqtt']['freq']):
+            log.info('logging to MQ')
+            sendToMQTT(thiscfg)
+            lastmq_time = upload_trigger_time
+
+        log.debug(f'elapsed {(upload_trigger_time - upload_init_time).seconds}')
+        log.debug(f'{upload_init_time}, {upload_trigger_time}')
         if (upload_trigger_time - upload_init_time).seconds > uploadperiod and testmode == 0 and os.path.isfile(fnam):
+
             log.info('uploading image')
             upload_init_time = upload_trigger_time
             if s3 is not None:
                 try:
                     s3, bucket, s3prefix = s3details(thiscfg, hostname)
                     s3.meta.client.upload_file(fnam, bucket, f'{s3prefix}/live.jpg', ExtraArgs = {'ContentType': 'image/jpeg'})
-                    log.info(f'uploaded live image to {bucket}/{s3prefix}')
+                    log.debug(f'uploaded live image to {bucket}/{s3prefix}')
                     uploadcounter = 0
                 except Exception as e:
                     log.warning(f'upload to {bucket}/{s3prefix} failed')
                     log.info(e, exc_info=True)
             else:
-                #log.info('s3 not configured')
+                log.debug('s3 not configured')
                 pass
             if ftpserver is not None:
                 try:
@@ -828,7 +839,7 @@ if __name__ == '__main__':
                     log.warning(f'upload to {ftpserver} failed')
                     log.info(e, exc_info=True)
             else:
-                #log.info('ftpserver not configured')
+                log.debug('ftpserver not configured')
                 pass
         if testmode == 1:
             log.info(f'would have uploaded {fnam}')

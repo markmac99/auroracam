@@ -3,10 +3,11 @@
   vars_files: 
     - /mnt/c/Users/{{ lookup('env','USER' )}}/apikeys/mqvariables.enc
   vars:
-    srcdir: "/mnt/c/Users/{{ lookup('env','USER' )}}/OneDrive/dev/astro/auroracam"
+    srcdir: "/mnt/c/Users/{{ lookup('env','USER' )}}/OneDrive/dev/tackley/auroracam"
     destdir: ~/source/auroracam
     macaddress: 00:12:13:63:0b:c6
     ipaddress: 192.168.1.40
+    routeraddress: 192.168.1.1
     latitude: 51.88
     longitude: -1.31
     altitude: 80
@@ -31,9 +32,7 @@
     - {src: '{{srcdir}}/checkAuroracam.sh', dest: '{{destdir}}/', mode: '755', backup: no }
     - {src: '{{srcdir}}/archiveData.sh', dest: '{{destdir}}/', mode: '755', backup: no }
     - {src: '{{srcdir}}/config.ini', dest: '{{destdir}}/', mode: '644', backup: no }
-    - {src: '{{srcdir}}/logToMQTT.sh', dest: '{{destdir}}/', mode: '754', backup: no }
     - {src: '{{srcdir}}/requirements.txt', dest: '{{destdir}}/', mode: '644', backup: no }
-    - {src: '{{srcdir}}/mqtt.cfg', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/auroracam.service', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/CamManager.py', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/camManager.sh', dest: '{{destdir}}/', mode: '755', backup: no }
@@ -41,12 +40,17 @@
   - name: update camera IP address
     ansible.builtin.replace:
       path: '{{destdir}}/config.ini'
-      regexp: "MYIP"
+      regexp: "CAMERAIP"
       replace: "{{ ipaddress }}"
+  - name: update router IP address
+    ansible.builtin.replace:
+      path: '{{destdir}}/config.ini'
+      regexp: "ROUTERIP"
+      replace: "{{ routeraddress }}"
   - name: update camera MAC address
     ansible.builtin.replace:
       path: '{{destdir}}/config.ini'
-      regexp: "MYMAC"
+      regexp: "CAMERAMAC"
       replace: "{{ macaddress }}"
   - name: update latitude
     ansible.builtin.replace:
@@ -88,17 +92,22 @@
   # mqtt settings
   - name: update mqtt broker
     lineinfile: 
-      path: '{{destdir}}/mqtt.cfg'
+      path: '{{destdir}}/config.ini'
       regexp: 'BROKER='
       line: 'BROKER=metsatpi'
+  - name: update MQTT topic
+    lineinfile:
+      path: '{{destdir}}/config.ini'
+      regexp: 'TOPIC='
+      line: 'TOPIC=servers'
   - name: update MQTT username
     lineinfile:
-      path: '{{destdir}}/mqtt.cfg'
+      path: '{{destdir}}/config.ini'
       regexp: 'USERNAME='
       line: 'USERNAME=rmscams'
   - name: update MQTT password
     lineinfile:
-      path: '{{destdir}}/mqtt.cfg'
+      path: '{{destdir}}/config.ini'
       regexp: 'PASSWORD='
       line: 'PASSWORD={{ rmscampassword }}'
   # archive settings
