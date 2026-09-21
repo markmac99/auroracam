@@ -31,7 +31,7 @@
     - {src: '{{srcdir}}/startAuroraCam.sh', dest: '{{destdir}}/', mode: '755', backup: no }
     - {src: '{{srcdir}}/checkAuroracam.sh', dest: '{{destdir}}/', mode: '755', backup: no }
     - {src: '{{srcdir}}/archiveData.sh', dest: '{{destdir}}/', mode: '755', backup: no }
-    - {src: '{{srcdir}}/config.ini', dest: '{{destdir}}/', mode: '644', backup: no }
+    - {src: '{{srcdir}}/config.ini.sample', dest: '{{destdir}}/config.ini', mode: '644', backup: no }
     - {src: '{{srcdir}}/requirements.txt', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/auroracam.service', dest: '{{destdir}}/', mode: '644', backup: no }
     - {src: '{{srcdir}}/CamManager.py', dest: '{{destdir}}/', mode: '644', backup: no }

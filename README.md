@@ -39,12 +39,23 @@ cd ~/source/auroracam
 wget https://raw.githubusercontent.com/markmac99/auroracam/refs/heads/master/install.sh
 bash ./install.sh
 ```
+### Obtain the camera's IP and MAC addresses
+You can obtain these by running the `camManager` script in a Terminal window as shown here:
+``` bash
+cd $HOME/source/auroracam
+python CamManager.py search
+```
+This should produce a list of compatible cameras on your network. Make a note of the details then type `quit`.  
 
-### Now edit `config.ini` and fill in following
-  * IPADDRESS - the IP address of your camera
+
+### Create the config file
+Copy `config.ini.sample` to `config.ini`, then fill in the following: 
+  * IPADDRESS - the IP address of your camera.
+  * MACADDRESS - the MAC address of your camera. 
+  * ROUTERADDRESS - the IP address of your router. 
   * LAT, LON, ALT - your latitude & longitude in degrees (+ for East) and elevation above sealevel in metres. 
   * other values can be left at their defauults. 
-  
+ 
 Now reboot the pi. Shortly after reboot it should start capturing data - you will see the lights on the camera cable flickering every few seconds.  
 
 ## Advanced Configuration 
@@ -62,3 +73,19 @@ The process generates a lot of data. Automatic housekeeping is performed and wil
 older data. You can specify how many days to keep via the ini file.
 
 If you have access to an sftp server you can also configure the system to archive zip files of data for safe keeping. You will need to  update the ARCHIVE section of the config file with the server, user, user's ssh key location, and the target folder. 
+
+## Logging to MQ
+MQ is a simple message queue that is commonly used to provide monitoring and notifications. 
+
+The auroracam software can log disk usage and cpu temperature to MQ, if you have an MQ server available. To activate the feature, update the MQ section of the config file for example as shown here
+``` bash
+# mqtt config - leave blank to disable
+[mqtt]
+BROKER=mybroker
+TOPIC=servers
+USERNAME=mq_username
+PASSWORD=mq_password
+PORT=1883
+FREQ=300 # how often to send, in seconds
+```
+
