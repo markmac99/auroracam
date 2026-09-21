@@ -492,7 +492,7 @@ def getStartEndTimes(currdt, thiscfg, origdusk=None):
     if origdusk:
         if (nextset - origdusk) < datetime.timedelta(seconds=10):
             nextset = origdusk
-    log.info(f'night starts at {nextset} and ends at {nextrise}')
+    log.debug(f'night starts at {nextset} and ends at {nextrise}')
     return nextset.replace(tzinfo=datetime.timezone.utc), nextrise.replace(tzinfo=datetime.timezone.utc), lastrise.replace(tzinfo=datetime.timezone.utc)
 
 
@@ -769,7 +769,7 @@ if __name__ == '__main__':
             fnam2 = os.path.join(capdirname, now.strftime('%Y%m%d_%H%M%S') + '.jpg')
             shutil.copyfile(fnam, fnam2)
             createLatestIndex(capdirname)
-            log.debug(f'and copied to {capdirname}')
+            log.info(f'saved to {fnam2}')
         # when we move from day to night, make the day timelapse then switch exposure and flag
         if now < dawn and now > dusk and isnight is False:
             if daytimelapse:
@@ -843,7 +843,7 @@ if __name__ == '__main__':
                 pass
         if testmode == 1:
             log.info(f'would have uploaded {fnam}')
-        log.info(f'sleeping for {pausetime} seconds')
+        log.debug(f'sleeping for {pausetime} seconds')
         if os.path.isfile(os.path.expanduser('~/.stopac')):
             os.remove(os.path.expanduser('~/.stopac'))
             log.info('Shutting down at user request')
