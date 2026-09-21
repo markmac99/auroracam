@@ -13,29 +13,35 @@ import socket
 import pprint
 from time import sleep
 import logging 
+from CamManager import camManager
 
+MAXRETRIES = 5
 
 log = logging.getLogger("logger")
 
 
-def connectToCam(host_ip):
+def connectToCam(host_ip, thiscfg):
     cam = DVRIPCam(host_ip)
     print('connecting to', host_ip)
-    for i in range(0,5):
+    for i in range(MAXRETRIES):
         try: 
             if cam.login():
                 log.info("Success! Connected to " + host_ip)
                 break
         except:
-            log.warning("Failure. Could not connect. retrying in 30 seconds")
-            time.sleep(30)
-    if i == 4:
+            log.warning("Failure. Could not connect. retrying in 5 seconds")
+            time.sleep(5)
+            ipaddress = thiscfg['auroracam']['ipaddress']
+            macaddress = thiscfg['auroracam']['macaddress']
+            routeraddress = thiscfg['auroracam']['routeraddress']
+            camManager(['',f'search;config {macaddress} {ipaddress} 255.255.255.0 {routeraddress};quit'])
+    if i == MAXRETRIES-1:
         log.error(f'unable to connect to camera at {host_ip}, aborting')
-        exit(1)
+        return False
     return cam
 
 
-def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp=False):
+def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp=False, thiscfg=None):
     daycmode = '0x00000001'
     nightcmode = '0x00000002'
     if nightColor is True:
@@ -57,7 +63,9 @@ def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp
             expo = 100
             minexp = '0x00009C40'
         maxexp = '0x00009C40'
-    cam = connectToCam(host_ip)
+    cam = connectToCam(host_ip, thiscfg)
+    if not cam:
+        return False
 
     params = cam.get_info("Camera")
     log.info(params['Param'])
@@ -93,6 +101,7 @@ def setCameraExposure(host_ip, daynight, nightgain=70, nightColor=False, autoExp
     # i think everything else can be left at the defaults
 
     cam.close()
+    return True
 
 
 def strIPtoHex(ip):

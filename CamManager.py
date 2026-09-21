@@ -24,7 +24,10 @@ if sys.version_info[0] < 3:
 
 import os
 import struct
-import fcntl
+try:
+    import fcntl
+except Exception:
+    print('fcntl not available, no functions will work')
 import json
 from locale import getlocale
 from subprocess import check_output
@@ -122,6 +125,29 @@ CODES = {
     608: "Configuration parsing error",
 }
 
+logLevel = 20	
+
+
+# list of preferred interfaces - camera is supposed to be connected to a wired interface
+intfs = ['eth', 'eno', 'wlx', 'enx']
+icon = "R0lGODlhIAAgAPcAAAAAAAkFAgwKBwQBABQNBRAQDQQFERAOFA4QFBcWFSAaFCYgGAoUMhwiMSUlJCsrKyooJy8wLjUxLjkzKTY1Mzw7OzY3OEpFPwsaSRsuTRUsWD4+QCo8XQAOch0nYB05biItaj9ARjdHYiRMfEREQ0hIR0xMTEdKSVNOQ0xQT0NEUVFNUkhRXlVVVFdYWFxdXFtZVV9wXGZjXUtbb19fYFRda19gYFZhbF5wfWRkZGVna2xsa2hmaHFtamV0Ynp2aHNzc3x8fHh3coF9dYJ+eH2Fe3K1YoGBfgIgigwrmypajDtXhw9FpxFFpSdVpzlqvFNzj0FvnV9zkENnpUh8sgdcxh1Q2jt3zThi0SJy0Dl81Rhu/g50/xp9/x90/zB35TJv8DJ+/EZqzj2DvlGDrlqEuHqLpHeQp26SuhqN+yiC6imH/zSM/yqa/zeV/zik/1aIwlmP0mmayWSY122h3VWb6kyL/1yP8UGU/UiW/VWd/miW+Eqp/12k/1Co/1yq/2Gs/2qr/WKh/nGv/3er9mK3/3K0/3e4+4ODg4uLi4mHiY+Qj5WTjo+PkJSUlJycnKGem6ShnY2ZrKOjo6urrKqqpLi0prS0tLu8vMO+tb+/wJrE+bzf/sTExMfIx8zMzMjIxtrWyM/Q0NXU1NfY193d3djY1uDf4Mnj+931/OTk5Ozs7O/v8PLy8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAAAALAAAAAAgACAAAAj+AAEIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mgx4iVMnTyJInVKlclSpD550nRpUqKGmD59EjWqlMlVOFWdIgWq0iNNoBIhSujokidPn0aNKrmqVStWqjxRumTqyI5KOxI5OpiIkiakNG2yelqK5alKLSAJgbBBB6RIjArmCKLIkV1HjyZNpTTJFKgSQoI4cGBiBxBIR6QM6TGQxooWL3LwMBwkSJEcLUq8YATDAZAdMkKh+GGpAo0cL1wInJuokSNIeqdeCgLBAoVMR2CEMkHDzAcnTCzsCAKERwsXK3wYKYLIdd6pjh4guCGJw5IpT7R8CeNlCwsikx7+JTJ+PAZlRHXxOgqBAQMTLXj0AAKkJw+eJw6CXGqJyAWNyT8QgZ5rsD2igwYEOOEGH38EEoghgcQhQgJAxISJI/8ZNoQUijiX1yM7NIBAFm3wUcghh9yBhQcCFEBDJ6V8MskKhgERxBGMMILXI7AhsoAAGSgRBRlliLHHHlZgMAAJmLByCiUnfGajFEcgotVzjkhggAYjjBHFFISgkoodSDAwAyStqDIJAELs4CYQQxChVSRTQcJCFWmUyAcghmzCCRgdXCEHEU69VJiNdDmnV0s4rNHFGmzgkUcfhgiShAd0nNHDVAc9YIEFFWxAQgkVpKAGF1yw4UYdc6AhhQohJFiwQAIRPQCHFlRAccMJFCRAgAAVJXDBBAsQEEBHDwUEADs="
+helptext = """
+    Usage: %s [-q] [-n] [Command];[Command];...
+    -q				No output
+    -n				No gui
+    Command			Description
+
+    help			This help
+    echo			Just echo
+    log [filename]		Set log file
+    logLevel [0..100]	Set log verbosity
+    search [brand]		Searching devices of [brand] or all
+    table			Table of devices
+    json			JSON String of devices
+    device [MAC]		JSON String of [MAC]
+    config [MAC] [IP] [MASK] [GATE] [Pasword]   - Configure searched divice
+    """ % os.path.basename(__file__)
+lang, charset = getlocale()
 
 def tolog(s):
     print(s)
@@ -352,6 +378,8 @@ def ConfigXM(data, debug=False):
         print("Success")
     return answer
 
+searchers = {"xm": SearchXM}
+configure = {"xm": ConfigXM}
 
 def FlashXM(cmd):
     cam = DVRIPCam(GetIP(devices[cmd[1]]["HostIP"]), "admin", cmd[2])
@@ -363,13 +391,14 @@ def FlashXM(cmd):
 
 
 def ProcessCMD(cmd):
+    print(cmd)
     global log, logLevel, devices, searchers, configure
     if logLevel == 20:
         tolog(datetime.now().strftime("[%Y-%m-%d %H:%M:%S] >") + " ".join(cmd))
     if cmd[0].lower() == "q" or cmd[0].lower() == "quit":
         sys.exit(1)
     if cmd[0].lower() in ["help", "?", "/?", "-h", "--help"]:
-        return help
+        return helptext
     if cmd[0].lower() == "search":
         tolog("%s" % ("Search"))
         if len(cmd) > 1 and cmd[1].lower() in searchers.keys():
@@ -750,58 +779,29 @@ class GUITk:
         ProcessCMD(["loglevel", str(10)])
 
 
-if __name__ == "__main__":
-
-
-    logLevel = 20	
-    searchers = {"xm": SearchXM}
-    configure = {"xm": ConfigXM}
-
+def camManager(args):
     # check if there's a DISPLAY, and use commandline mode if not
     if os.getenv('DISPLAY', default=None) is None:
         GUI_TK = False
 
-    # list of preferred interfaces - camera is supposed to be connected to a wired interface
-    intfs = ['eth', 'eno', 'wlx', 'enx']
-    icon = "R0lGODlhIAAgAPcAAAAAAAkFAgwKBwQBABQNBRAQDQQFERAOFA4QFBcWFSAaFCYgGAoUMhwiMSUlJCsrKyooJy8wLjUxLjkzKTY1Mzw7OzY3OEpFPwsaSRsuTRUsWD4+QCo8XQAOch0nYB05biItaj9ARjdHYiRMfEREQ0hIR0xMTEdKSVNOQ0xQT0NEUVFNUkhRXlVVVFdYWFxdXFtZVV9wXGZjXUtbb19fYFRda19gYFZhbF5wfWRkZGVna2xsa2hmaHFtamV0Ynp2aHNzc3x8fHh3coF9dYJ+eH2Fe3K1YoGBfgIgigwrmypajDtXhw9FpxFFpSdVpzlqvFNzj0FvnV9zkENnpUh8sgdcxh1Q2jt3zThi0SJy0Dl81Rhu/g50/xp9/x90/zB35TJv8DJ+/EZqzj2DvlGDrlqEuHqLpHeQp26SuhqN+yiC6imH/zSM/yqa/zeV/zik/1aIwlmP0mmayWSY122h3VWb6kyL/1yP8UGU/UiW/VWd/miW+Eqp/12k/1Co/1yq/2Gs/2qr/WKh/nGv/3er9mK3/3K0/3e4+4ODg4uLi4mHiY+Qj5WTjo+PkJSUlJycnKGem6ShnY2ZrKOjo6urrKqqpLi0prS0tLu8vMO+tb+/wJrE+bzf/sTExMfIx8zMzMjIxtrWyM/Q0NXU1NfY193d3djY1uDf4Mnj+931/OTk5Ozs7O/v8PLy8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAAAAALAAAAAAgACAAAAj+AAEIHEiwoMGDCBMqXMiwocOHECNKnEixosWLGDNq3Mgx4iVMnTyJInVKlclSpD550nRpUqKGmD59EjWqlMlVOFWdIgWq0iNNoBIhSujokidPn0aNKrmqVStWqjxRumTqyI5KOxI5OpiIkiakNG2yelqK5alKLSAJgbBBB6RIjArmCKLIkV1HjyZNpTTJFKgSQoI4cGBiBxBIR6QM6TGQxooWL3LwMBwkSJEcLUq8YATDAZAdMkKh+GGpAo0cL1wInJuokSNIeqdeCgLBAoVMR2CEMkHDzAcnTCzsCAKERwsXK3wYKYLIdd6pjh4guCGJw5IpT7R8CeNlCwsikx7+JTJ+PAZlRHXxOgqBAQMTLXj0AAKkJw+eJw6CXGqJyAWNyT8QgZ5rsD2igwYEOOEGH38EEoghgcQhQgJAxISJI/8ZNoQUijiX1yM7NIBAFm3wUcghh9yBhQcCFEBDJ6V8MskKhgERxBGMMILXI7AhsoAAGSgRBRlliLHHHlZgMAAJmLByCiUnfGajFEcgotVzjkhggAYjjBHFFISgkoodSDAwAyStqDIJAELs4CYQQxChVSRTQcJCFWmUyAcghmzCCRgdXCEHEU69VJiNdDmnV0s4rNHFGmzgkUcfhgiShAd0nNHDVAc9YIEFFWxAQgkVpKAGF1yw4UYdc6AhhQohJFiwQAIRPQCHFlRAccMJFCRAgAAVJXDBBAsQEEBHDwUEADs="
-    help = """
-        Usage: %s [-q] [-n] [Command];[Command];...
-        -q				No output
-        -n				No gui
-        Command			Description
-
-        help			This help
-        echo			Just echo
-        log [filename]		Set log file
-        logLevel [0..100]	Set log verbosity
-        search [brand]		Searching devices of [brand] or all
-        table			Table of devices
-        json			JSON String of devices
-        device [MAC]		JSON String of [MAC]
-        config [MAC] [IP] [MASK] [GATE] [Pasword]   - Configure searched divice
-        """ % os.path.basename(
-        sys.argv[0]
-    )
-    lang, charset = getlocale()
-
-    if len(sys.argv) > 1:
-        cmds = " ".join(sys.argv[1:])
+    if len(args) > 1:
+        cmds = " ".join(args[1:])
         if cmds.find("-q ") != -1:
             cmds = cmds.replace("-q ", "").replace("-n ", "").strip()
             logLevel = 0
         for cmd in cmds.split(";"):
             ProcessCMD(cmd.split(" "))
-    if '-n' in sys.argv:
+    if '-n' in args:
         GUI_TK = False
         
-    if GUI_TK and "-n" not in sys.argv:
+    if GUI_TK and "-n" not in args:
         root = Tk()
         app = GUITk(root)
         if (
-            "--theme" in sys.argv
+            "--theme" in args
         ):  # ('winnative', 'clam', 'alt', 'default', 'classic', 'vista', 'xpnative')
             style = Style()
-            theme = [sys.argv.index("--theme") + 1]
+            theme = [args.index("--theme") + 1]
             if theme in style.theme_names():
                 style.theme_use(theme)
         root.mainloop()
@@ -812,8 +812,13 @@ if __name__ == "__main__":
     while True:
         data = input("> ").split(";")
         for cmd in data:
+            print(cmd)
             result = ProcessCMD(cmd.split(" "))
             if hasattr(result, "keys") and "Ret" in result.keys():
                 print(CODES[result["Ret"]])
             else:
                 print(result)
+
+
+if __name__ == "__main__":
+    camManager(sys.argv)
