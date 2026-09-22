@@ -1,5 +1,7 @@
 # A Simple Aurora Camera
 
+Note: This work is licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International. To view a copy of this license, follow [this link](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
 The scripts in this folder implement a very simple aurora camera using a barebones IP camera.  As well as the Atom mini-pc mentioned below I have installed it on a Raspberry Pi4 running Bookworm 64-bit, but any small computer would do as long as its running a variant of Linux and has Python 3.7 or later. 
 
 ## How it works
