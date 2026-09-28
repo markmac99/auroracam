@@ -45,6 +45,7 @@ bash ./install.sh
 You can obtain these by running the `camManager` script in a Terminal window as shown here:
 ``` bash
 cd $HOME/source/auroracam
+source ~/vAuroracam/bin/activate
 python CamManager.py search
 ```
 This should produce a list of compatible cameras on your network. Make a note of the details then type `quit`.  
