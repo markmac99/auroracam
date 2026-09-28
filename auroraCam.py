@@ -664,6 +664,7 @@ def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
 
 
 if __name__ == '__main__':
+    networkfailcount = 0
     hostname = platform.uname().node
 
     thiscfg = configparser.ConfigParser()
@@ -673,7 +674,12 @@ if __name__ == '__main__':
     thiscfg['auroracam']['logdaystokeep']='30'
 
     setupLogging(thiscfg)
-    sendToMQTT(thiscfg)
+    try:
+        sendToMQTT(thiscfg)
+    except Exception as e:
+        networkfailcount += 1
+        log.warning('unable to connect to MQ')
+        log.warning(e)
 
     datadir = os.path.expanduser(thiscfg['auroracam']['datadir'])
     os.makedirs(datadir, exist_ok=True)
@@ -809,8 +815,13 @@ if __name__ == '__main__':
 
         if (upload_trigger_time - lastmq_time).seconds > int(thiscfg['mqtt']['freq']):
             log.info('logging to MQ')
-            sendToMQTT(thiscfg)
-            lastmq_time = upload_trigger_time
+            try:
+                sendToMQTT(thiscfg)
+                lastmq_time = upload_trigger_time
+            except Exception as e:
+                networkfailcount += 1
+                log.warning('unable to connect to MQ')
+                log.warning(e)
 
         log.debug(f'elapsed {(upload_trigger_time - upload_init_time).seconds}')
         log.debug(f'{upload_init_time}, {upload_trigger_time}')
@@ -825,6 +836,7 @@ if __name__ == '__main__':
                     log.debug(f'uploaded live image to {bucket}/{s3prefix}')
                     uploadcounter = 0
                 except Exception as e:
+                    networkfailcount += 1
                     log.warning(f'upload to {bucket}/{s3prefix} failed')
                     log.info(e, exc_info=True)
             else:
@@ -836,6 +848,7 @@ if __name__ == '__main__':
                     log.info(f'uploaded live image to {ftpserver}')
                     uploadcounter = 0
                 except Exception as e:
+                    networkfailcount += 1
                     log.warning(f'upload to {ftpserver} failed')
                     log.info(e, exc_info=True)
             else:
@@ -848,4 +861,12 @@ if __name__ == '__main__':
             os.remove(os.path.expanduser('~/.stopac'))
             log.info('Shutting down at user request')
             exit(0)
+        if networkfailcount > 300/pausetime:
+            os.remove(norebootflag)
+            try:
+                os.system('/usr/bin/sudo /usr/sbin/shutdown -r now')
+            except Exception as e:
+                log.info('unable to reboot')
+                log.info(e, exc_info=True)
+
         time.sleep(pausetime)
