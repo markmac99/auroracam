@@ -52,8 +52,8 @@ def getFilesToUpload(thiscfg, s3, bucket, s3prefix):
         archfldr = thiscfg['archive']['archfldr']
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
         try:
+            pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
             ssh_client.connect(thiscfg['archive']['archserver'], username=archuser, pkey=pkey, look_for_keys=False)
             ftp_client = ssh_client.open_sftp()
             ftp_client.get(os.path.join(archfldr,'FILES_TO_UPLOAD.inf'), os.path.join(datadir,'FILES_TO_UPLOAD.inf'))
@@ -89,8 +89,8 @@ def pushFilesToUpload(thiscfg, s3, bucket, s3prefix):
         archfldr = thiscfg['archive']['archfldr']
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
         try:
+            pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
             ssh_client.connect(thiscfg['archive']['archserver'], username=archuser, pkey=pkey, look_for_keys=False)
             ftp_client = ssh_client.open_sftp()
             ftp_client.put(locfnam, os.path.join(archfldr,'FILES_TO_UPLOAD.inf'))
@@ -162,9 +162,12 @@ def compressAndDelete(thiscfg, thisfile):
     else:
         log.info(f'Archiving {thisfile}')
         zfname = os.path.join(datadir, thisfile)
-        archname = shutil.make_archive(zfname, 'zip', zfname)
-        if os.path.isfile(archname):
-            shutil.rmtree(zfname)
+        if os.path.isfile(zfname) or os.path.isdir(zfname):
+            archname = shutil.make_archive(zfname, 'zip', zfname)
+            if os.path.isfile(archname):
+                shutil.rmtree(zfname)
+        else:
+            log.warning(f'{zfname} does not exist, cant archive it')
     return archname
 
 
@@ -183,8 +186,12 @@ def compressAndUpload(thiscfg, thisdir):
     else:
         log.info(f'Compressing {thisdir}')
         zfname = os.path.join(datadir, thisdir)
-        archname = shutil.make_archive(zfname,'zip',zfname)
-        log.info(f'{zfname}')
+        if os.path.isdir(zfname) or os.path.isfile(zfname):
+            archname = shutil.make_archive(zfname,'zip',zfname)
+            log.info(f'{zfname}')
+        else:
+            log.warning(f'{zfname} does not exist, cant upload it')
+            return None
 
     archserver = thiscfg['archive']['archserver']
     if archserver == '':
@@ -196,8 +203,8 @@ def compressAndUpload(thiscfg, thisdir):
     archfldr = thiscfg['archive']['archfldr']
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
     try:
+        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(thiscfg['archive']['archkey']))
         ssh_client.connect(archserver, username=archuser, pkey=pkey, look_for_keys=False)
         ftp_client = ssh_client.open_sftp()
         uploadfile = os.path.join(archfldr, thisdir +'.zip')
@@ -418,9 +425,9 @@ def getAWSConn(thiscfg, remotekeyname, uid):
         sshkeyfile = thiscfg['uploads']['idkey']
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(sshkeyfile))
-        key = ''
         try: 
+            pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(sshkeyfile))
+            key = ''
             ssh_client.connect(servername, username=uid, pkey=pkey, look_for_keys=False)
             ftp_client = ssh_client.open_sftp()
             try:
@@ -649,8 +656,8 @@ def setupLogging(thiscfg, prefix='auroracam_'):
 def uploadOneFile(fnam, ulloc, ftpserver, userid, sshkey):
     ssh_client = paramiko.SSHClient()
     ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(sshkey))
     try: 
+        pkey = paramiko.RSAKey.from_private_key_file(os.path.expanduser(sshkey))
         targloc = os.path.join(ulloc, os.path.basename(fnam))
         ssh_client.connect(ftpserver, userid, pkey=pkey, look_for_keys=False)
         ftp_client = ssh_client.open_sftp()
